@@ -1,8 +1,8 @@
 EN ESTE FICHERO SE ENUMERARAN AQUELLAS TAREAS QUE QUEDEN POR HACER
 
-CONVENIO: Las tareas ya realizadas se marcarán con las inciales de aquel que las haya terminado al comienzo de la línea, 
+CONVENIO: Las tareas ya realizadas se marcarán con las iniciales de aquel que las haya terminado al comienzo de la línea, 
 en lugar de borrarlas, para así mantener un registro y poder hacer una valoración del trabajo individual. En caso de que la tarea se haya
-completado entre varias personas, habrá que indicar las inicailes de cada uno de los participantes. Si todos han participado, con un * bastará.
+completado entre varias personas, habrá que indicar las iniciales de cada uno de los participantes. Si todos han participado, con un * bastará.
 
 
 
