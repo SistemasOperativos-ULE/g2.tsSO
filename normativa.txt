@@ -1,0 +1,17 @@
+EN ESTE FICHERO SE DETALLARA LA NORMATIVA QUE SEGUIRÁ EL GRUPO 2 PARA LA ELABORACION DE LA PRACTICA FINAL DE SISTEMAS OPERATIVOS: TSUNAMI 
+DEMOCRATICO CULTURAL LEONES
+
+EL GRUPO 2 ESTARA CONFORMADO POR: ANGEL LOPEZ ARIAS, ALEJANDRO PEREZ FERNANDEZ, PABLO BAYON GUTIERREZ Y DIEGO SIMON GONZALEZ
+
+GITHUB:
+    -El repositorio pertenece al team g2-tsunami de la organización Sistemas Operativos-ULE
+    -En el repositorio habrá 3 ficheros:
+          1) tsunami.c --> Fichero del programa a elaborar siguiendo la practica
+          2) todo.txt --> Fichero donde se registraran las tareas a realizar y las ya realizadas siguiendo la siguiente normativa:
+                    *Las tareas ya realizadas se marcarán con las inciales de aquel que las haya terminado al comienzo de la línea, 
+                     en lugar de borrarlas, para así mantener un registro y poder hacer una valoración del trabajo individual.
+                    *En caso de que la tarea se haya completado entre varias personas, habrá que indicar las inicailes de cada uno de los participantes.
+                    *Si todos han participado, con un * bastará.
+          3) normativa.txt --> Este fichero. Aquí figurara la normativa a seguir
+    -Se evitara subir al repositorio lineas de codigo, incluso comentado, que contenga caracteres que puedan provocar problemas de compatibilidad
+    con GitHub o de compilacion, tales como vocales con tilde o "enyes".
