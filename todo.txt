@@ -1,10 +1,11 @@
-EN ESTE FICHERO SE ENUMERARAN AQUELLAS TAREAS QUE QUEDEN POR HACER
+//version 0.02
 
-CONVENIO: Las tareas ya realizadas se marcarán con las iniciales de aquel que las haya terminado al comienzo de la línea, 
-en lugar de borrarlas, para así mantener un registro y poder hacer una valoración del trabajo individual. En caso de que la tarea se haya
-completado entre varias personas, habrá que indicar las iniciales de cada uno de los participantes. Si todos han participado, con un * bastará.
+IDENTIFICADORES:
+      A: Angel Lopez Arias
+      P: Alejandro Perez Fernandez
+      B: Pablo Bayon Gutierrez
+      D: Diego Simon Gonzalez
+      
 
-
-
-DS - Poner en marcha el repositorio de GitHub y subir los primeros ficheros
-Elaborar la normativa
+D - Poner en marcha el repositorio de GitHub y subir los primeros ficheros
+D - Actualizacion de los identificadores y normativa sobre GitHub
