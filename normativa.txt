@@ -22,17 +22,24 @@ GITHUB:
     
     -Cada nuevo commit del repositorio debera incluir la nueva version del fichero modificado. Tambien debe estar indicado en el propio fichero, al inicio.
 
+
 PUNTUALIDAD Y COMPROMISO:
 	-En las reuniones de equipo aquel integrante que llegue más de 5 minutos tarde tendrá una penalización de 1€, como aportación a un bote común para los gastos del grupo.
 
-    -Se deberán cumplir los plazos de entrega de cada tarea individual bajo pena de penalización por parte del coordinador del grupo.
-
-    -Tras dos penalizaciones, se considerará la expulsión del grupo del integrante, sometida a votación por el resto de miembros del grupo.
+	-Los miembros del grupo deberán cumplir con los plazos establecidos en la planificación del grupo.
 
 
-FORMAS DE TRABAJO
+FORMAS DE TRABAJO:
 	-Se realizará una reunión por semana como mínimmo, ya sea presencial o por videoconferencia.
 
     -En cada reunión grupal se expondrán los avances realizados por cada integrante del grupo.
 
     -Toda acción que se lleve a cabo de manera individual o colectiva se deberá reflejar en los foros de comunicación y en la documentación del grupo.
+
+
+AMONESTACIONES:
+	-El retraso no justificado de las entregas en los plazos establecidos se castigará con una penalización.
+
+	-El plagio estará penado con una penalización.
+
+	-Tras dos penalizaciones, se considerará la expulsión del grupo del integrante, sometida a votación por el resto de miembros del grupo.
