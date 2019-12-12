@@ -106,7 +106,7 @@ void accionesSolicitud(){
 
 	/** 
 	*4- estoy siendo atendido??
-	* if(true){
+	* if(noEstaSiendoAtendido){
 	*	5-calcular el comportamiento de la solicitud 
 	*		a-Si se va y  EM se escribe en el log, se acaba el hilo y EM se libera espacio en la cola
 	*		b-Sino duerme 4 segundos y vuelve al punto 4
