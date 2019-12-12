@@ -9,3 +9,5 @@ IDENTIFICADORES:
 
 D - Poner en marcha el repositorio de GitHub y subir los primeros ficheros
 D - Actualizacion de los identificadores y normativa sobre GitHub
+B - Estructura de la practica con comentarios en el archivo .c de la practica.
+Declarar las variables globales (semaforos, colas, contadores, etc) para que los miembros del grupo puedan empezar a trabajar
