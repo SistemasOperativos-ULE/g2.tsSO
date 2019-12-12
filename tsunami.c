@@ -1,3 +1,6 @@
+//PRACTICA FINAL G2 TSUNAMI DEMOCRATICO
+//MIEMBROS: Angel Lopez Arias, Alejandro Perez Fernandez, Pablo Bayon Gutierrez y Diego Simon Gonzalez
+
 #include <stdio.h>
 
 //exit 
@@ -19,7 +22,7 @@
 
 #define INVITACION 1 //Usuarios que intentan acceder por invitacion
 
-#define TAMCOLA 15
+#define TAMCOLADEFECTO 15
 
 
 /**
@@ -28,24 +31,28 @@
 *
 **/
 
-struct usuario{
+
+struct solicitudes{
 	int id;
 	bool atendido;
-	int tipo; //QR o INVITACION
+	int tipo; //invitacion o QR
 };
 
 //Semaforos y variables condicion
 
-//Contador de solicitudes
 
-struct usuario *cola; //El tamanyo en principio es 15, pero puede variar
+//Contador de solicitudes
+int contadorSolicitudes = 1;
+
+struct solicitudes *cola; //El tamanyo en principio es 15, pero puede variar
 
 //Lista de 4 usuarios en una actividad social
+struct solicitudes colaActividadSocial[4];
 
 //Atendedores (lista o no)
-pthread_t *atendedoresQR, *atendedoresINV, *atendedoresPRO; //Punteros para que se pueda modificar el numero de atendedores dinamicamente
+pthread_t *atendedoresQR, atendedoresINV, atendedoresPRO; //Punteros para que se pueda modificar el numero de atendedores dinamicamente
 
-FILE *logsTsunami;
+FILE *registroTiempos;
 
 
 
@@ -60,6 +67,8 @@ void accionesSolicitud();
 void accionesAtendedor();
 void accionesCoordinadorSocial();
 void writeLogMessage(char *id, char *msg);
+int calculaAleatorio(int min, int max);
+void acabarPrograma(int sig);
 
 
 //	Se usa la notacion EM para zonas de exclusion mutua y VC para zonas en las que se deben usar variables condicion
@@ -72,6 +81,8 @@ void writeLogMessage(char *id, char *msg);
 int main(int argc, char *argv[]){
 
 	int tamCola, numPro;
+
+	struct sigaction sLlegaSolicitud, sFinalizar;
 	
 	if(argc==1){
 		tamCola = atoi(argv[1]);
@@ -84,12 +95,32 @@ int main(int argc, char *argv[]){
 		numPro = atoi(argv[2]);
 		atendedoresPRO = (pthread_t *)malloc(sizeof(pthread_t)*numPro);
 	}else{
-		cola=(struct usuario *)malloc(sizeof(struct usuario)*(TAMCOLA));
+		cola=(struct usuario *)malloc(sizeof(struct usuario)*(TAMCOLADEFECTO));
 		atendedoresPRO = (pthread_t *)malloc(sizeof(pthread_t)*1);
 	}
 
-	atendedoresQR = (pthread_t *)malloc(sizeof(pthread_t)*1);
-	atendedoresINV = (pthread_t *)malloc(sizeof(pthread_t)*1);
+
+	sLlegaSolicitud.sa_handler = nuevaSolicitud;//Se asigna la manejadora nuevaSolicitud a la estrutura sigaction 
+
+	if(sigaction(SIGUSR1, &sLlegaSolicitud, NULL) == -1){ //Enmascaramos la senal SIGUSR1 (a partir de ahora se llamara a nuevaSolicitud cuando reciba SIGUSR1)
+		perror("Error al comunicar la llegada de una nueva solicitud");
+		exit(-1);
+	}
+
+	if(sigaction(SIGUSR2, &sLlegaSolicitud, NULL) == -1){ //Enmascaramos la senal SIGUSR1 (a partir de ahora se llamara a nuevaSolicitud cuando reciba SIGUSR2)
+		perror("Error al comunicar la llegada de una nueva solicitud");
+		exit(-1);
+	}
+
+
+	sFinalizar.sa_handler = acabarPrograma;//Se asigna la manejadora acabarPrograma a la estrutura sigaction 
+	
+	if(sigaction(SIGINT, &sFinalizar, NULL) == -1){ //Enmascaramos la senal SIGINT (a partir de ahora se llamara a acabarPrograma cuando reciba SIGINT)
+		perror("Error al comunicar la finalizacion del programa");
+		exit(-1);
+	}
+
+
 
 	//Manejar las seniales SIGUSR1, SIGUSR2 y SIGINT
 
@@ -107,7 +138,7 @@ int main(int argc, char *argv[]){
 
 
 /** 
-* FUNCION QUE ESCRIBE LOS LOGS EN SU FICHERO
+* FUNCION QUE SIMULA LA LLEGADA DE UNA NUEVA SOLICITUD
 *
 **/
 void nuevaSolicitud(){
@@ -131,7 +162,7 @@ void nuevaSolicitud(){
 
 
 /** 
-* FUNCION QUE ESCRIBE LOS LOGS EN SU FICHERO
+* FUNCION QUE MANEJA LAS ACCIONES QUE PUEDE REALIZAR UNA SOLICITUD
 *
 **/
 void accionesSolicitud(){
@@ -169,7 +200,7 @@ void accionesSolicitud(){
 
 
 /** 
-* FUNCION QUE ESCRIBE LOS LOGS EN SU FICHERO
+* FUNCION QUE MANEJA LAS TAREAS DEL ATENDEDOR
 *
 **/
 void accionesAtendedor(){
@@ -196,7 +227,7 @@ void accionesAtendedor(){
 
 
 /** 
-* FUNCION QUE ESCRIBE LOS LOGS EN SU FICHERO
+* FUNCION QUE MANEJA LAS ACCIONES DEL COORDINADOR SOCIAL
 *
 **/
 void accionesCoordinadorSocial(){
@@ -225,7 +256,30 @@ void writeLogMessage(char *id, char *msg){
 	char stnow[19];
 	strftime(stnow, 19, "%d/%m/%y %H:%M:%S", tlocal);
 	//Escribimos en el log
-	logsTsunami = fopen("logsTsunami.txt", "a");
-	fprintf(logsTsunami, "[%s] %s: %s\n", stnow, id, msg);
-	fclose(logsTsunami);
+	registroTiempos = fopen("registroTiempos.log", "a");
+	fprintf(registroTiempos, "[%s] %s: %s\n", stnow, id, msg);
+	fclose(registroTiempos);
+}
+
+
+
+/** 
+* FUNCION QUE CALCULA UN NUMERO ALEATORIO EN UN RANGO DADO 
+*
+**/
+int calculaAleatorio(int min, int max){
+
+	int aleatorio = (int) rand() % (max-min+1) + min;
+
+	return aleatorio;
+}
+
+
+
+/** 
+* FUNCION MANEJADORA PARA LA SENIAL SIGINT, QUE TERMINARA EL PROGRAMA DE MANERA ORDENADA
+*
+**/
+void acabarPrograma(int sig){
+
 }
