@@ -12,6 +12,15 @@
 #include <unistd.h>
 #include <time.h>
 
+//valores boolean
+#include <stdbool.h>
+
+#define QR 0 //Usuarios que intentan acceder por QR
+
+#define INVITACION 1 //Usuarios que intentan acceder por invitacion
+
+#define TAMCOLA 15
+
 
 /**
 * DECLARACIONES GLOBALES
@@ -19,17 +28,24 @@
 *
 **/
 
+struct usuario{
+	int id;
+	bool atendido;
+	int tipo; //QR o INVITACION
+};
+
 //Semaforos y variables condicion
 
 //Contador de solicitudes
 
-//Lista de 15 usuarios (podemos hacer un array de int de 3 dimensiones o hacer un array de estructuras) Hay que almacenar ID, Atendido y Tipo
+struct usuario *cola; //El tamanyo en principio es 15, pero puede variar
 
 //Lista de 4 usuarios en una actividad social
 
 //Atendedores (lista o no)
+pthread_t *atendedoresQR, *atendedoresINV, *atendedoresPRO; //Punteros para que se pueda modificar el numero de atendedores dinamicamente
 
-//Fichero de logs (FILE *logFile)
+FILE *logsTsunami;
 
 
 
@@ -54,6 +70,27 @@ void writeLogMessage(char *id, char *msg);
 *
 **/
 int main(int argc, char *argv[]){
+
+	int tamCola, numPro;
+	
+	if(argc==1){
+		tamCola = atoi(argv[1]);
+		cola=(struct usuario *)malloc(sizeof(struct usuario)*(tamCola));
+		atendedoresPRO = (pthread_t *)malloc(sizeof(pthread_t)*1);
+	}else if(argc==2){
+		tamCola = atoi(argv[1]);
+		cola=(struct usuario *)malloc(sizeof(struct usuario)*(tamCola));
+
+		numPro = atoi(argv[2]);
+		atendedoresPRO = (pthread_t *)malloc(sizeof(pthread_t)*numPro);
+	}else{
+		cola=(struct usuario *)malloc(sizeof(struct usuario)*(TAMCOLA));
+		atendedoresPRO = (pthread_t *)malloc(sizeof(pthread_t)*1);
+	}
+
+	atendedoresQR = (pthread_t *)malloc(sizeof(pthread_t)*1);
+	atendedoresINV = (pthread_t *)malloc(sizeof(pthread_t)*1);
+
 	//Manejar las seniales SIGUSR1, SIGUSR2 y SIGINT
 
 	//EM  Inicializar recursos (semaforos, contador solicitudes, lista solcitues, atendedores, actividades sociales, fichero log, variables condicion)
@@ -188,7 +225,7 @@ void writeLogMessage(char *id, char *msg){
 	char stnow[19];
 	strftime(stnow, 19, "%d/%m/%y %H:%M:%S", tlocal);
 	//Escribimos en el log
-	logFile = fopen(logFileName, "a");
-	fprintf(logFile, "[%s] %s: %s\n", stnow, id, msg);
-	fclose(logFile);
+	logsTsunami = fopen("logsTsunami.txt", "a");
+	fprintf(logsTsunami, "[%s] %s: %s\n", stnow, id, msg);
+	fclose(logsTsunami);
 }
