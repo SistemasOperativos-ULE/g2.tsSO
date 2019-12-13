@@ -32,10 +32,11 @@
 **/
 
 
-struct solicitudes{
+struct solicitud{
 	int id;
 	bool atendido;
 	int tipo; //invitacion o QR
+	bool aceptado; //Lo hemos anyadido nosotros
 };
 
 //Semaforos y variables condicion
@@ -44,17 +45,17 @@ struct solicitudes{
 //Contador de solicitudes
 int contadorSolicitudes = 1;
 
-struct solicitudes *cola; //El tamanyo en principio es 15, pero puede variar
+struct solicitud *cola; //El tamanyo en principio es 15, pero puede variar
 
 //Lista de 4 usuarios en una actividad social
-struct solicitudes colaActividadSocial[4];
+struct solicitud colaActividadSocial[4];
 
 //Atendedores (lista o no)
 pthread_t *atendedoresQR, atendedoresINV, atendedoresPRO; //Punteros para que se pueda modificar el numero de atendedores dinamicamente
 
 FILE *registroTiempos;
 
-
+int tamCola;
 
 /**
 * DECLARACIONES DE FUNCIONES
@@ -69,6 +70,8 @@ void accionesCoordinadorSocial();
 void writeLogMessage(char *id, char *msg);
 int calculaAleatorio(int min, int max);
 void acabarPrograma(int sig);
+void solicitudRechazada();
+void compactar();
 
 
 //	Se usa la notacion EM para zonas de exclusion mutua y VC para zonas en las que se deben usar variables condicion
@@ -80,22 +83,23 @@ void acabarPrograma(int sig);
 **/
 int main(int argc, char *argv[]){
 
-	int tamCola, numPro;
+	int numPro;
 
 	struct sigaction sLlegaSolicitud, sFinalizar;
 	
 	if(argc==1){
 		tamCola = atoi(argv[1]);
-		cola=(struct usuario *)malloc(sizeof(struct usuario)*(tamCola));
+		cola=(struct solicitud *)malloc(sizeof(struct solicitud)*(tamCola));
 		atendedoresPRO = (pthread_t *)malloc(sizeof(pthread_t)*1);
 	}else if(argc==2){
 		tamCola = atoi(argv[1]);
-		cola=(struct usuario *)malloc(sizeof(struct usuario)*(tamCola));
+		cola=(struct solicitud *)malloc(sizeof(struct solicitud)*(tamCola));
 
 		numPro = atoi(argv[2]);
 		atendedoresPRO = (pthread_t *)malloc(sizeof(pthread_t)*numPro);
 	}else{
-		cola=(struct usuario *)malloc(sizeof(struct usuario)*(TAMCOLADEFECTO));
+		tamCola = TAMCOLADEFECTO;
+		cola=(struct solicitud *)malloc(sizeof(struct solicitud)*(TAMCOLADEFECTO));
 		atendedoresPRO = (pthread_t *)malloc(sizeof(pthread_t)*1);
 	}
 
@@ -281,5 +285,80 @@ int calculaAleatorio(int min, int max){
 *
 **/
 void acabarPrograma(int sig){
+
+}
+
+/**
+*
+*
+**/
+void solicitudRechazada(){
+
+}
+
+
+/**
+*
+*
+**/
+bool encolar(struct solicitud solicitudEncolada){
+
+	bool encolado=false;
+	int posicion = posicionSiguiente();
+
+	if(posicion ==-1){
+		encolado = false;
+	}else{
+		cola[posicionSiguiente()] = solicitudEncolada;
+		encolado=true;
+	}
+
+	return encolado;
+	
+}
+
+
+void compactar(){
+	int i=0; j=0, siguiente = posicionSiguiente();
+
+	while(i<siguiente){
+		if(cola[i]==NULL){
+			for(j=i; j<siguiente; j++) {
+				cola[i] = cola[i+1];
+			}
+			siguiente--;
+			cola[siguiente] = NULL;
+			i=siguiente;
+		}
+		i++;
+	}
+}
+
+
+int posicionSiguiente(){
+	int i=0;
+
+	while(cola[i]!=NULL){
+		i++;
+	}
+
+	if(i==tamCola){
+		i=-1;
+	}
+
+	return i;
+}
+
+struct solicitud descartar(){
+	//TODO REVISAR ESTE METODO 
+	struct solicitud desencolada;
+
+	desencolada = cola[];
+
+	cola[posicionSiguiente()] = NULL;
+
+	compactar();
+
+	return desencolada;
 
 }
