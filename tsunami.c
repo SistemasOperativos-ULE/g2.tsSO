@@ -18,6 +18,9 @@
 //valores boolean
 #include <stdbool.h>
 
+//Senyales
+#include <signal.h>
+
 #define QR 0 //Usuarios que intentan acceder por QR
 
 #define INVITACION 1 //Usuarios que intentan acceder por invitacion
