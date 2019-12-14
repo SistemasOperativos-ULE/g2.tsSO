@@ -16,13 +16,14 @@
 
 struct solicitud{
 	int id;
-	bool atendido;
 	int tipo; //INVITACION = 1; QR = 0
+	bool aceptado;
 	bool descartado; //Lo hemos anyadido nosotros
+	bool atendido;
 	pthread_t tid;
-	bool encolado;
 };
-int tamCola =15;
+
+int tamCola = 15;
 int id = 1;
 //int numSolicitudes = 0; //contador que usamos para movernos entre las solicitudes, hilos, y las struct
 bool peticionSolicitudes = true;
@@ -37,20 +38,57 @@ void nuevaSolicitud(int);
 int calculaAleatorio(int min, int max);
 int generadorID();
 void *sol(void *arg);
+bool descartar(int val);
 
 void *sol(void *arg){ //Funcion que ejecutan los hilos al crearse
-	struct solicitud *s;
+	
+	struct solicitud *s; //la estructura a la que apunta el puntero que le pasamos al hilo
 	s = (struct solicitud *) arg;
-	//printf("Soy una solicitud, y mi id es %d\n", s->id);
+
+	//imprimimos los datos que tiene la estructura asociada al hilo
 	printf("Soy una solicitud, y mi id es %d\n", (*s).id);
 	if(s->tipo == INVITACION)
 		printf("Soy de tipo Invitación\n");
 	else
 		printf("Soy de tipo QR\n");
 	printf("Atendido = %d y descartado = %d\n", s->atendido, s->descartado);
-	//printf("Mi id es %d, atendido = %d, mi tipo es ' %d ' y descartado es = %d\n", s->id, s->atendido, s->tipo, s->descartado);
-	//TO DO
+
+	/*
+	//Ahora viene la parte en la que la solicitud comprueba cada 3 segundos si ha sido aceptada o rechazada
+	while(descartado == false && aceptado == false){
+		sleep(3);
+	}
+	//Cuando sale del while es que tiene uno de los 2 a true
+
+	//Si tiene descartado a true lo terminamos y inicializamos sus parametros a 0
+	if(descartado == true){
+		//Inicializamos todos los parametros de la estructura del hilo a cero
+		borrarEstructura(&s);
+		//Eliminamos el hilo con el exit
+		pthread_exit(NULL);
+	}
+	//Si tiene aceptado a true pasara a disposición del atendedor
+	else{
+		//en el propio hilo del atendedor calculamos la probabilidad del 50% de si quiere formar parte de una actividad
+		//hay que esperar a que el atendedor o el coordinador de la actividad lo mate
+	}
+	//TO DO//wait(coordinador.me.mata.o.coordinador.me.mata)
+	*/
 	pthread_exit(NULL);
+}
+
+void borrarEstructura(void *args){
+
+	struct solicitud *s; //la estructura a la que apunta el puntero que le pasamos al hilo
+	s = (struct solicitud *) arg;
+
+	s->id = -1;
+	s->tipo = -1;
+	s->aceptado = false;
+	s->descartado = false;
+	s->atendido = false;
+	s->tid = NULL;
+
 }
 
 int main(int argc, char *argv[]){
@@ -101,8 +139,8 @@ int main(int argc, char *argv[]){
 
 	//pthread_join(*(hilos+0), NULL);
 	//printf("Hilo 1 muerto\n");
-	//pthread_exit(NULL);
-	return 0;
+	pthread_exit(NULL);
+	//rerurn 0;
 }
 
 void nuevaSolicitud(int sig){
@@ -120,48 +158,26 @@ void nuevaSolicitud(int sig){
 		if(sig == SIGINT){ //SIGUSR1 -- invitación
 			(*(cola+siguiente)).tipo = INVITACION;
 			pthread_create(&(*(cola+siguiente)).tid, NULL, sol, &*(cola+siguiente));
-			/*(*(solicitudes+numSolicitudes)).id = generadorID();
-			(*(solicitudes+numSolicitudes)).atendido = false;
-			(*(solicitudes+numSolicitudes)).tipo = 0;
-			(*(solicitudes+numSolicitudes)).descartado = false;
-			pthread_create(&*(hilos+numSolicitudes), NULL, sol, &*(solicitudes+numSolicitudes));
-
-			numSolicitudes++;
-			hilos = (pthread_t *) realloc(hilos, numSolicitudes); //Se reserva memoria para un elemento mas
-			*/
-
 
 		}else if(sig == SIGQUIT){ //SIGUSR2 -- QR
 			(*(cola+siguiente)).tipo = QR;
 			pthread_create(&(*(cola+siguiente)).tid, NULL, sol, &*(cola+siguiente));
-			/*(*(solicitudes+numSolicitudes)).id = generadorID();
-			(*(solicitudes+numSolicitudes)).atendido = false;
-			(*(solicitudes+numSolicitudes)).tipo = 1;
-			(*(solicitudes+numSolicitudes)).descartado = false;
-			pthread_create(&*(hilos+numSolicitudes), NULL, sol, &*(solicitudes+numSolicitudes));
 
-			numSolicitudes++;
-			hilos = (pthread_t *) realloc(hilos, numSolicitudes); //Se reserva memoria para un elemento mas
-			*/
 		}else if(sig == SIGTSTP){
 			peticionSolicitudes = false;
 		}
 	}
-	
 }
 
 
 int posicionSiguiente(){
 	int i=0;
-
 	while(cola[i].id!=NULL){
 		i++;
 	}
-
 	if(i>=tamCola){
 		i=-1;
 	}
-
 	return i;
 }
 int calculaAleatorio(int min, int max){
@@ -171,4 +187,27 @@ int calculaAleatorio(int min, int max){
 
 int generadorID(){
 	return id++; 
+}
+
+bool descartar(int val){
+	//Dependiendo del tipo, se descarta un porcentaje u otro
+	bool expulsar = false;
+
+	if(val == QR){
+		if(calculaAleatorio(0, 10)<=3) //Un 30% se descartan
+			expulsar=true;
+		else
+			if(calculaAleatorio(0, 100)<=15) //Un 15% del resto se descartan
+				expulsar=true;
+	}
+
+	if(val == INVITACION){
+		if(calculaAleatorio(0, 10)<=1) //Un 10% se descartan
+			expulsar=true;
+		else
+			if(calculaAleatorio(0, 100)<=15) //Un 15% del resto se descartan
+				expulsar=true;
+	}
+
+	return expulsar;
 }
