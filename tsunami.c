@@ -18,7 +18,7 @@
 //valores boolean
 #include <stdbool.h>
 
-//Senyales
+//senyales
 #include <signal.h>
 
 #define QR 0 //Usuarios que intentan acceder por QR
@@ -39,14 +39,15 @@ struct solicitud{
 	int id;
 	bool atendido;
 	int tipo; //invitacion o QR
-	bool aceptado; //Lo hemos anyadido nosotros
+	bool descartado; //Lo hemos anyadido nosotros
+	pthread_t tid;
 };
 
 //Semaforos y variables condicion
 
 
 //Contador de solicitudes
-int contadorSolicitudes = 1;
+int id = 1;
 
 struct solicitud *cola; //El tamanyo en principio es 15, pero puede variar
 
@@ -54,11 +55,13 @@ struct solicitud *cola; //El tamanyo en principio es 15, pero puede variar
 struct solicitud colaActividadSocial[4];
 
 //Atendedores (lista o no)
-pthread_t *atendedoresQR, atendedoresINV, atendedoresPRO; //Punteros para que se pueda modificar el numero de atendedores dinamicamente
+pthread_t atendedorQR, atendedorINV, *atendedoresPRO; //Punteros para que se pueda modificar el numero de atendedores dinamicamente
 
 FILE *registroTiempos;
 
-int tamCola;
+int tamCola = TAMCOLADEFECTO;
+
+bool fin= false;
 
 /**
 * DECLARACIONES DE FUNCIONES
@@ -75,6 +78,12 @@ int calculaAleatorio(int min, int max);
 void acabarPrograma(int sig);
 void solicitudRechazada();
 void compactar();
+void *imprimeDatosSolicitud(void *arg);
+void imprimeEstado();
+struct solicitud descartar();
+int posicionSiguiente();
+
+
 
 
 //	Se usa la notacion EM para zonas de exclusion mutua y VC para zonas en las que se deben usar variables condicion
@@ -85,6 +94,18 @@ void compactar();
 *
 **/
 int main(int argc, char *argv[]){
+
+	//Manejar las seniales SIGUSR1, SIGUSR2 y SIGINT
+
+	//EM  Inicializar recursos (semaforos, contador solicitudes, lista solcitues, atendedores, actividades sociales, fichero log, variables condicion)
+
+	//3 hilos atendedores
+
+	//Hilo coordinateur
+
+	//Esperar por una de esas 3 seniales
+
+	//Esperar seniales de forma infinita
 
 	int numPro;
 
@@ -127,19 +148,14 @@ int main(int argc, char *argv[]){
 		exit(-1);
 	}
 
+	while(fin==false){
+		pause();
+	}
 
+	free(cola);
+	printf("Todo esta cumplido, podemos cerrar\n");
 
-	//Manejar las seniales SIGUSR1, SIGUSR2 y SIGINT
-
-	//EM  Inicializar recursos (semaforos, contador solicitudes, lista solcitues, atendedores, actividades sociales, fichero log, variables condicion)
-
-	//3 hilos atendedores
-
-	//Hilo coordinateur
-
-	//Esperar por una de esas 3 seniales
-
-	//Esperar seniales de forma infinita
+	return 0;
 }
 
 
@@ -148,14 +164,14 @@ int main(int argc, char *argv[]){
 * FUNCION QUE SIMULA LA LLEGADA DE UNA NUEVA SOLICITUD
 *
 **/
-void nuevaSolicitud(){
+void nuevaSolicitud(int sig){
 	//Comprobar si hay espacio
 
 	/**
 	* EM if(hayEspacio){
 	*	EM aniadir solicitud
 	*	EM contador++
-	*	EM nuevaSolicitud.id = contadorSolicitudes
+	*	EM nuevaSolicitud.id = id
 	*	EM nuevaSolicitud.atendido = 0
 	*	EM tipo = switch depende de la senial recibida
 	*	EM Crear hilo para solicitud
@@ -164,6 +180,26 @@ void nuevaSolicitud(){
 	*}
 	*
 	**/
+
+	int siguiente= posicionSiguiente();
+
+	if(posicionSiguiente()==tamCola){
+		//LOG
+	}else{
+
+		(*(cola+siguiente)).id = ++id;
+		(*(cola+siguiente)).atendido = false;
+		(*(cola+siguiente)).descartado = false;
+		if(sig == SIGINT){ //SIGUSR1 -- invitación
+			(*(cola+siguiente)).tipo = INVITACION;
+			pthread_create(&(*(cola+siguiente)).tid, NULL, imprimeDatosSolicitud, &*(cola+siguiente));
+
+		}else{ //SIGUSR2 -- QR
+			(*(cola+siguiente)).tipo = QR;
+			pthread_create(&(*(cola+siguiente)).tid, NULL, imprimeDatosSolicitud, &*(cola+siguiente));
+		}
+	}
+
 }
 
 
@@ -269,6 +305,34 @@ void writeLogMessage(char *id, char *msg){
 }
 
 
+void imprimeEstado(){
+
+	printf("Una vez creados todos las solicitudes, esto es lo que tenemos en el sistema:\n\n");
+	for(int i=0; i<posicionSiguiente()-1; i++){
+		printf("-----------------------------------------\n");
+		printf("ID --> %d\n", (*(cola+i)).id);
+		printf("ATENDIDO --> %d\n", (*(cola+i)).atendido);
+		if((*(cola+i)).tipo == QR)
+			printf("TIPO --> QR\n");
+		else
+			printf("TIPO --> Invitación\n");
+		printf("descartado --> %d\n", (*(cola+i)).descartado);
+	}
+	printf("-----------------------------------------\n\n");
+}
+
+void *imprimeDatosSolicitud(void *arg){
+	struct solicitud *s;
+	s = (struct solicitud *) arg;
+	printf("Soy una solicitud, y mi id es %d\n", (*s).id);
+	if(s->tipo == INVITACION)
+		printf("Soy de tipo Invitación\n");
+	else
+		printf("Soy de tipo QR\n");
+	printf("Atendido = %d y descartado = %d\n", s->atendido, s->descartado);
+	//TO DO
+	pthread_exit(NULL);
+}
 
 /** 
 * FUNCION QUE CALCULA UN NUMERO ALEATORIO EN UN RANGO DADO 
@@ -288,7 +352,8 @@ int calculaAleatorio(int min, int max){
 *
 **/
 void acabarPrograma(int sig){
-
+	imprimeEstado();
+	fin = true;
 }
 
 /**
@@ -321,8 +386,8 @@ bool encolar(struct solicitud solicitudEncolada){
 }
 
 
-void compactar(){
-	int i=0; j=0, siguiente = posicionSiguiente();
+/*void compactar(){
+	int i=0, j=0, siguiente = posicionSiguiente();
 
 	while(i<siguiente){
 		if(cola[i]==NULL){
@@ -335,13 +400,13 @@ void compactar(){
 		}
 		i++;
 	}
-}
+}*/
 
 
 int posicionSiguiente(){
 	int i=0;
 
-	while(cola[i]!=NULL){
+	while(cola[i].id!=NULL){
 		i++;
 	}
 
@@ -352,7 +417,7 @@ int posicionSiguiente(){
 	return i;
 }
 
-struct solicitud descartar(){
+/*struct solicitud descartar(){
 	//TODO REVISAR ESTE METODO 
 	struct solicitud desencolada;
 
@@ -364,4 +429,4 @@ struct solicitud descartar(){
 
 	return desencolada;
 
-}
+}*/
