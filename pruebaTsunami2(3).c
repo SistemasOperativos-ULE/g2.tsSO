@@ -13,6 +13,9 @@
 #define QR 0 //Usuarios que intentan acceder por QR
 #define INVITACION 1 //Usuarios que intentan acceder por invitacion
 #define TAMCOLADEFECTO 15
+#define ATENCIONCORRECTA 1 
+#define ERRORESDATOS 2 
+#define ANTECEDENTES 3 
 
 struct solicitud{
 	int id;
@@ -21,6 +24,7 @@ struct solicitud{
 	bool descartado; //Lo hemos anyadido nosotros
 	bool atendido;
 	pthread_t tid;
+	int clase; 
 };
 
 int tamCola = 15;
@@ -52,34 +56,59 @@ void *sol(void *arg){ //Funcion que ejecutan los hilos al crearse
 	else
 		printf("Soy de tipo QR\n");
 	printf("Atendido = %d y descartado = %d\n", s->atendido, s->descartado);
-
-	/*
+	
 	//Ahora viene la parte en la que la solicitud comprueba cada 3 segundos si ha sido aceptada o rechazada
 	while(descartado == false && aceptado == false){
 		sleep(3);
 	}
+	
 	//Cuando sale del while es que tiene uno de los 2 a true
+	//aqui el atendedor ya ha seteado la clase de solicitud que somos
+	if(s->clase==ATENCIONCORRECTA)
+		printf("Mis datos estan correctos\n");
+	else if(s->clase==ERRORESDATOS)
+		printf("Mis datos estan con errores\n");
+	else if(s->clase==ANTECEDENTES)
+		printf("TENGO ANTEDEDENTES!!\n");
 
 	//Si tiene descartado a true lo terminamos y inicializamos sus parametros a 0
 	if(descartado == true){
 		//Inicializamos todos los parametros de la estructura del hilo a cero
 		borrarEstructura(&s);
 		//Eliminamos el hilo con el exit
-		pthread_exit(NULL);
+		pthread_exit(NULL);//-->SI , ESPERA A QUE LA COLA DE ACTV SE VACIE Y ENTRA, PARA ESPERAR A SER MATADO
 	}
 	//Si tiene aceptado a true pasara a disposición del atendedor
 	else{
-		//en el propio hilo del atendedor calculamos la probabilidad del 50% de si quiere formar parte de una actividad
-		//hay que esperar a que el atendedor o el coordinador de la actividad lo mate
+		if(s->clase == ANTEDEDENTES){
+			//Inicializamos todos los parametros de la estructura del hilo a cero
+			borrarEstructura(&s);
+			//Eliminamos el hilo con el exit
+			pthread_exit(NULL);
+		}
+		//CALCULAR PORCENTAJE DE PARTICIPACION EN ACTIVIDAD
+
+		if(calculaAleatorio(0, 1)==0){ //NO QUIERE PARTICIPAR
+			//Inicializamos todos los parametros de la estructura del hilo a cero
+			borrarEstructura(&s);
+			//Eliminamos el hilo con el exit
+			pthread_exit(NULL);
+
+		}else{ //SI QUIERE PARTICIPAR
+			//TODO: ESPERAR A LA COLA VACIA
+		}
+
+		//-->NO , SE EXPULSA
+		//-->SI , ESPERA A QUE LA COLA DE ACTV SE VACIE Y ENTRA, PARA ESPERAR A SER MATADO (VARIABLE CONDICION)
 	}
 	//TO DO//wait(coordinador.me.mata.o.coordinador.me.mata)
-	*/
+	
 	pthread_exit(NULL);
 }
 
 void borrarEstructura(void *args){
 
-	struct solicitud *s; //la estructura a la que apunta el puntero que le pasamos al hilo
+	/*struct solicitud *s; //la estructura a la que apunta el puntero que le pasamos al hilo
 	s = (struct solicitud *) arg;
 
 	s->id = -1;
@@ -87,7 +116,9 @@ void borrarEstructura(void *args){
 	s->aceptado = false;
 	s->descartado = false;
 	s->atendido = false;
-	s->tid = NULL;
+	s->tid = NULL;*/
+
+	//FUNCION DESENCOLAR
 
 }
 
@@ -169,7 +200,6 @@ void nuevaSolicitud(int sig){
 	}
 }
 
-
 int posicionSiguiente(){
 	int i=0;
 	while(cola[i].id!=NULL){
@@ -180,6 +210,7 @@ int posicionSiguiente(){
 	}
 	return i;
 }
+
 int calculaAleatorio(int min, int max){
 	int aleatorio = (int) rand() % (max-min+1) + min;
 	return aleatorio;
@@ -194,18 +225,18 @@ bool descartar(int val){
 	bool expulsar = false;
 
 	if(val == QR){
-		if(calculaAleatorio(0, 10)<=3) //Un 30% se descartan
+		if(calculaAleatorio(1, 10)<=3) //Un 30% se descartan
 			expulsar=true;
 		else
-			if(calculaAleatorio(0, 100)<=15) //Un 15% del resto se descartan
+			if(calculaAleatorio(1, 100)<=15) //Un 15% del resto se descartan
 				expulsar=true;
 	}
 
 	if(val == INVITACION){
-		if(calculaAleatorio(0, 10)<=1) //Un 10% se descartan
+		if(calculaAleatorio(1, 10)<=1) //Un 10% se descartan
 			expulsar=true;
 		else
-			if(calculaAleatorio(0, 100)<=15) //Un 15% del resto se descartan
+			if(calculaAleatorio(1, 100)<=15) //Un 15% del resto se descartan
 				expulsar=true;
 	}
 
