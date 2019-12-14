@@ -26,11 +26,13 @@ struct solicitud{
 	bool descartado; //Lo hemos anyadido nosotros
 	bool atendido;
 	pthread_t tid;
-	int clase; 
+	int clase; //Atencion correcta, errores en los datos o antecedentes policiales
 };
 
-int tamCola = 15;
 int idSolicitud = 1;
+
+//Inicialmente se pone al tamanio por defecto, puede que haya que cambiarlo en la parte extra de la practica (modificacion dinamica)
+int tamCola = TAMCOLADEFECTO;
 //int numSolicitudes = 0; //contador que usamos para movernos entre las solicitudes, hilos, y las struct
 bool peticionSolicitudes = true;
 
@@ -41,6 +43,7 @@ struct atendedor{
 	int numSolicitudes;
 	pthread_t tid;
 };
+
 int idAtendedor= 1;
 
 struct atendedor *atendedores; //Punteros para que se pueda modificar el numero de atendedores dinamicamente
@@ -90,7 +93,7 @@ void *sol(void *arg){ //Funcion que ejecutan los hilos al crearse
 	else if(s->clase==ERRORESDATOS)
 		printf("Mis datos estan con errores\n");
 	else if(s->clase==ANTECEDENTES)
-		printf("TENGO ANTEDEDENTES!!\n");
+		printf("TENGO ANTECEDENTES!!\n");
 
 	//Si tiene descartado a true lo terminamos y inicializamos sus parametros a 0
 	if(descartado == true){
