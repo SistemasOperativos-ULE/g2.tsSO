@@ -17,20 +17,22 @@
 struct solicitud{
 	int id;
 	bool atendido;
-	int tipo; //INVITACION = 0; QR = 1
-	bool aceptado; //Lo hemos anyadido nosotros
+	int tipo; //INVITACION = 1; QR = 0
+	bool descartado; //Lo hemos anyadido nosotros
+	pthread_t tid;
+	bool encolado;
 };
-
+int tamCola =15;
 int id = 1;
-int numSolicitudes = 0; //contador que usamos para movernos entre las solicitudes, hilos, y las struct
+//int numSolicitudes = 0; //contador que usamos para movernos entre las solicitudes, hilos, y las struct
 bool peticionSolicitudes = true;
 
 //Contador de solicitudes
 struct solicitud *cola; //El tamanyo en principio es 15, pero puede variar
 
-pthread_t *hilos; //TODOS LOS HILOS EN UN SOLO PUNTERO???
-struct solicitud *solicitudes; //ES NECESARIO??? YO USARIA SOLO LA COLA DE SOLICITUDES
-
+//pthread_t *hilos; //TODOS LOS HILOS EN UN SOLO PUNTERO???
+//struct solicitud *solicitudes; //ES NECESARIO??? YO USARIA SOLO LA COLA DE SOLICITUDES
+int posicionSiguiente();
 void nuevaSolicitud(int);
 int calculaAleatorio(int min, int max);
 int generadorID();
@@ -39,21 +41,23 @@ void *sol(void *arg);
 void *sol(void *arg){ //Funcion que ejecutan los hilos al crearse
 	struct solicitud *s;
 	s = (struct solicitud *) arg;
-	printf("Soy una solicitud, y mi id es %d\n", s->id);
-	if(s->tipo == 0)
+	//printf("Soy una solicitud, y mi id es %d\n", s->id);
+	printf("Soy una solicitud, y mi id es %d\n", (*s).id);
+	if(s->tipo == INVITACION)
 		printf("Soy de tipo Invitación\n");
 	else
 		printf("Soy de tipo QR\n");
-	printf("Atendido = %d y Aceptado = %d\n", s->atendido, s->aceptado);
-	//printf("Mi id es %d, atendido = %d, mi tipo es ' %d ' y aceptado es = %d\n", s->id, s->atendido, s->tipo, s->aceptado);
+	printf("Atendido = %d y descartado = %d\n", s->atendido, s->descartado);
+	//printf("Mi id es %d, atendido = %d, mi tipo es ' %d ' y descartado es = %d\n", s->id, s->atendido, s->tipo, s->descartado);
+	//TO DO
 	pthread_exit(NULL);
 }
 
 int main(int argc, char *argv[]){
 
 	cola = (struct solicitud *)malloc(sizeof(struct solicitud)*(TAMCOLADEFECTO));
-	hilos = (pthread_t *)malloc(sizeof(pthread_t));
-	solicitudes = (struct solicitud *)malloc(sizeof(struct solicitud));
+	//hilos = (pthread_t *)malloc(sizeof(pthread_t));
+	//solicitudes = (struct solicitud *)malloc(sizeof(struct solicitud));
 
 	struct sigaction sLlegaSolicitud;
 	sLlegaSolicitud.sa_handler = nuevaSolicitud;//Se asigna la manejadora nuevaSolicitud a la estrutura sigaction 
@@ -77,23 +81,22 @@ int main(int argc, char *argv[]){
 		pause();
 
 	printf("Una vez creados todos las solicitudes, esto es lo que tenemos en el sistema:\n\n");
-	for(int i=0; i<numSolicitudes; i++){
+	for(int i=0; i<posicionSiguiente()-1; i++){
 		printf("-----------------------------------------\n");
-		printf("ID --> %d\n", (*(solicitudes+i)).id);
-		printf("ATENDIDO --> %d\n", (*(solicitudes+i)).atendido);
-		if((*(solicitudes+i)).tipo == 1)
+		printf("ID --> %d\n", (*(cola+i)).id);
+		printf("ATENDIDO --> %d\n", (*(cola+i)).atendido);
+		if((*(cola+i)).tipo == QR)
 			printf("TIPO --> QR\n");
 		else
 			printf("TIPO --> Invitación\n");
-		printf("ACEPTADO --> %d\n", (*(solicitudes+i)).aceptado);
+		printf("descartado --> %d\n", (*(cola+i)).descartado);
 	}
 	printf("-----------------------------------------\n\n");
 
-	for(int i=0; i<numSolicitudes; i++){
+	/*for(int i=0; i<numSolicitudes; i++){
 		pthread_join(*(hilos+i), NULL);
-	}
-
-	//free(solicitudes);
+	}*/
+	free(cola);
 	printf("Todo esta cumplido, podemos cerrar\n");
 
 	//pthread_join(*(hilos+0), NULL);
@@ -103,37 +106,64 @@ int main(int argc, char *argv[]){
 }
 
 void nuevaSolicitud(int sig){
-
+	int siguiente= posicionSiguiente();
 	//LO PRIMERO QUE HAY QUE COMPROBAR ES SI HAY HUECO PARA ENTRAR EN LA COLA
-	
-	if(sig == SIGINT){ //SIGUSR1 -- invitación
-
-		(*(solicitudes+numSolicitudes)).id = generadorID();
-		(*(solicitudes+numSolicitudes)).atendido = false;
-		(*(solicitudes+numSolicitudes)).tipo = 0;
-		(*(solicitudes+numSolicitudes)).aceptado = false;
-		pthread_create(&*(hilos+numSolicitudes), NULL, sol, &*(solicitudes+numSolicitudes));
-
-		numSolicitudes++;
-		hilos = (pthread_t *) realloc(hilos, numSolicitudes); //Se reserva memoria para un elemento mas
-		
-
-	}else if(sig == SIGQUIT){ //SIGUSR2 -- QR
-		(*(solicitudes+numSolicitudes)).id = generadorID();
-		(*(solicitudes+numSolicitudes)).atendido = false;
-		(*(solicitudes+numSolicitudes)).tipo = 1;
-		(*(solicitudes+numSolicitudes)).aceptado = false;
-		pthread_create(&*(hilos+numSolicitudes), NULL, sol, &*(solicitudes+numSolicitudes));
-
-		numSolicitudes++;
-		hilos = (pthread_t *) realloc(hilos, numSolicitudes); //Se reserva memoria para un elemento mas
-
-	}else if(sig == SIGTSTP){
-		peticionSolicitudes = false;
+	if(posicionSiguiente()==tamCola){
+		//LOG
 	}
+	else{
+
+		(*(cola+siguiente)).id = generadorID();
+		(*(cola+siguiente)).atendido = false;
+		(*(cola+siguiente)).descartado = false;
+		(*(cola+siguiente)).encolado = false;
+		if(sig == SIGINT){ //SIGUSR1 -- invitación
+			(*(cola+siguiente)).tipo = INVITACION;
+			pthread_create(&(*(cola+siguiente)).tid, NULL, sol, &*(cola+siguiente));
+			/*(*(solicitudes+numSolicitudes)).id = generadorID();
+			(*(solicitudes+numSolicitudes)).atendido = false;
+			(*(solicitudes+numSolicitudes)).tipo = 0;
+			(*(solicitudes+numSolicitudes)).descartado = false;
+			pthread_create(&*(hilos+numSolicitudes), NULL, sol, &*(solicitudes+numSolicitudes));
+
+			numSolicitudes++;
+			hilos = (pthread_t *) realloc(hilos, numSolicitudes); //Se reserva memoria para un elemento mas
+			*/
+
+
+		}else if(sig == SIGQUIT){ //SIGUSR2 -- QR
+			(*(cola+siguiente)).tipo = QR;
+			pthread_create(&(*(cola+siguiente)).tid, NULL, sol, &*(cola+siguiente));
+			/*(*(solicitudes+numSolicitudes)).id = generadorID();
+			(*(solicitudes+numSolicitudes)).atendido = false;
+			(*(solicitudes+numSolicitudes)).tipo = 1;
+			(*(solicitudes+numSolicitudes)).descartado = false;
+			pthread_create(&*(hilos+numSolicitudes), NULL, sol, &*(solicitudes+numSolicitudes));
+
+			numSolicitudes++;
+			hilos = (pthread_t *) realloc(hilos, numSolicitudes); //Se reserva memoria para un elemento mas
+			*/
+		}else if(sig == SIGTSTP){
+			peticionSolicitudes = false;
+		}
+	}
+	
 }
 
 
+int posicionSiguiente(){
+	int i=0;
+
+	while(cola[i].id!=NULL){
+		i++;
+	}
+
+	if(i>=tamCola){
+		i=-1;
+	}
+
+	return i;
+}
 int calculaAleatorio(int min, int max){
 	int aleatorio = (int) rand() % (max-min+1) + min;
 	return aleatorio;

@@ -345,7 +345,7 @@ int posicionSiguiente(){
 		i++;
 	}
 
-	if(i==tamCola){
+	if(i>=tamCola){
 		i=-1;
 	}
 
