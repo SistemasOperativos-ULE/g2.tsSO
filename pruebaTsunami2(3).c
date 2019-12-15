@@ -47,7 +47,7 @@ struct atendedor{
 int idAtendedor= 1;
 
 struct atendedor *atendedores; //Punteros para que se pueda modificar el numero de atendedores dinamicamente
-int numeroAtendedores=3;
+int numeroAtendedores = 3;
 //Contador de solicitudes
 struct solicitud *cola; //El tamanyo en principio es 15, pero puede variar
 
@@ -59,6 +59,10 @@ int calculaAleatorio(int min, int max);
 int generadorID(int tipo);
 void *sol(void *arg);
 bool descartar(int val);
+void borrarEstructura(void *args);
+void nuevoAtendedor(int tipo);
+int buscarSiguiente(int tipo);
+
 
 void *sol(void *arg){ //Funcion que ejecutan los hilos al crearse
 	struct solicitud *s; //la estructura a la que apunta el puntero que le pasamos al hilo
@@ -73,7 +77,7 @@ void *sol(void *arg){ //Funcion que ejecutan los hilos al crearse
 	printf("Atendido = %d y descartado = %d\n", s->atendido, s->descartado);
 	
 	//Ahora viene la parte en la que la solicitud comprueba cada 3 segundos si ha sido aceptada o rechazada
-	while(descartado == false && atendido == false){
+	while(s->descartado == false && s->atendido == false){
 		if (descartar(s->tipo)== false)
 			sleep(3);
 		else{
@@ -82,8 +86,6 @@ void *sol(void *arg){ //Funcion que ejecutan los hilos al crearse
 			pthread_exit(NULL);
 		}
 	}
-	//      TTTTTTTTTTTTTTOOOOOOOOOOOOOODDDDDDDDDDDDDDDDDDDDDDOOOOOOOOOOOOOOO
-
 
 
 	//Cuando sale del while es que tiene uno de los 2 a true
@@ -95,44 +97,76 @@ void *sol(void *arg){ //Funcion que ejecutan los hilos al crearse
 	else if(s->clase==ANTECEDENTES)
 		printf("TENGO ANTECEDENTES!!\n");
 
-	//Si tiene descartado a true lo terminamos y inicializamos sus parametros a 0
-	if(descartado == true){
+	//      TTTTTTTTTTTTTTOOOOOOOOOOOOOODDDDDDDDDDDDDDDDDDDDDDOOOOOOOOOOOOOOO
+	// AQUI HAY QUE ESPERAR A QUE ACABE DE SER ATENDIDO
+
+	if(s->clase == ANTECEDENTES){ //Este tipo de solicitud no puede participar en actividades sociales, asique se va pa su casa
 		//Inicializamos todos los parametros de la estructura del hilo a cero
 		borrarEstructura(&s);
 		//Eliminamos el hilo con el exit
-		pthread_exit(NULL);//-->SI , ESPERA A QUE LA COLA DE ACTV SE VACIE Y ENTRA, PARA ESPERAR A SER MATADO
+		pthread_exit(NULL);
+
+	}else if(calculaAleatorio(0, 1)==0){ //NO QUIERE PARTICIPAR
+		//Inicializamos todos los parametros de la estructura del hilo a cero
+		borrarEstructura(&s);
+		//Eliminamos el hilo con el exit
+		pthread_exit(NULL);
+
+	}else{
+		//TOOOOOOODOOOOOOOOOOOOOOOOOOOOO
+		//SI QUIERE PARTICIPAR
+		//TODO: ESPERAR A LA COLA VACIA
 	}
-	//Si tiene aceptado a true pasara a disposición del atendedor
-	else{
-		if(s->clase == ANTEDEDENTES){
-			//Inicializamos todos los parametros de la estructura del hilo a cero
-			borrarEstructura(&s);
-			//Eliminamos el hilo con el exit
-			pthread_exit(NULL);
-		}
-		//CALCULAR PORCENTAJE DE PARTICIPACION EN ACTIVIDAD
 
-		if(calculaAleatorio(0, 1)==0){ //NO QUIERE PARTICIPAR
-			//Inicializamos todos los parametros de la estructura del hilo a cero
-			borrarEstructura(&s);
-			//Eliminamos el hilo con el exit
-			pthread_exit(NULL);
-
-		}else{ //SI QUIERE PARTICIPAR
-			//TODO: ESPERAR A LA COLA VACIA
-		}
-
-		//-->NO , SE EXPULSA
-		//-->SI , ESPERA A QUE LA COLA DE ACTV SE VACIE Y ENTRA, PARA ESPERAR A SER MATADO (VARIABLE CONDICION)
-	}
+	//-->NO , SE EXPULSA
+	//-->SI , ESPERA A QUE LA COLA DE ACTV SE VACIE Y ENTRA, PARA ESPERAR A SER MATADO (VARIABLE CONDICION
 	//TO DO//wait(coordinador.me.mata.o.coordinador.me.mata)
 	
 	pthread_exit(NULL);
 }
 
-void accionesAtendedor(){
+void *accionesAtendedor(void *arg){
 
 	//SI SE TRATA DE UN ATENDEDOR PRO ATENDERA A QUIEN MAS TIEMPO LLEVE INDEPENDIENTEMENTE DEL TIPO
+	struct atendedor *at = (struct atendedor *) arg;
+	int solicitudAatender;
+	int aleatorio;
+	int tiempoAtencion;
+
+	while(true){
+
+		do{
+			solicitudAatender = buscarSiguiente(at->tipo);
+			if(solicitudAatender == -1){
+				sleep(1);
+			}
+		}while(solicitudAatender == -1);
+
+		aleatorio = calculaAleatorio(1,10);
+
+		if(aleatorio <= 7){
+			cola[solicitudAatender].clase = ATENCIONCORRECTA;
+			tiempoAtencion = calculaAleatorio(1,4);
+		}else if(aleatorio <= 9){
+			cola[solicitudAatender].clase = ERRORESDATOS;
+			tiempoAtencion = calculaAleatorio(2,6);
+		}else{
+			cola[solicitudAatender].clase = ANTECEDENTES;
+			tiempoAtencion = calculaAleatorio(6,10);
+		}
+
+		cola[solicitudAatender].atendido = true;
+
+		sleep(tiempoAtencion);
+
+		//TODO TENER EN CUENTA LOS DOS CAMBIOS DE FLAG DE ATENDIDO QUE PONE EL DISENIO
+
+		if(at->numSolicitudes % 5 == 0){
+			//le toca tomar el cafe
+			sleep(10);
+		}
+
+	}
 
 	/**
 	* 1- EM Busca la primera solicitud de su tipo (la que mas tiempo lleve esperando)
@@ -149,6 +183,44 @@ void accionesAtendedor(){
 	* 10- Volvemos al paso 1 y EM buscamos el siguiente (siempre con prioridad a su tipo)
 	*
 	**/
+}
+
+
+int buscarSiguiente(int tipo){
+	int encontrado = -1;
+	bool busquedaTerminada = false;
+	int i = 0;
+	int siguiente = posicionSiguiente(SOLICITUD);
+	if(siguiente != 0){
+		switch(tipo){
+			case PRO:
+				while(!busquedaTerminada){
+					if(cola[i].descartado == false && cola[i].atendido == false){
+						encontrado = i;
+						busquedaTerminada = true;
+					}else{
+						i++;
+					}
+				}
+				break;
+
+			default:
+				while(!busquedaTerminada){
+					if(cola[i].descartado == false && cola[i].atendido == false && cola[i].tipo == tipo){
+						encontrado = i;
+						busquedaTerminada = true;
+					}else{
+						i++;
+					}
+				}
+
+				if(encontrado == -1){
+					return buscarSiguiente(PRO);
+				}
+		}
+	}
+
+	return encontrado;
 }
 
 void borrarEstructura(void *args){
@@ -169,32 +241,28 @@ void borrarEstructura(void *args){
 
 int main(int argc, char *argv[]){
 	cola = (struct solicitud *)malloc(sizeof(struct solicitud)*(TAMCOLADEFECTO));
-	//hilos = (pthread_t *)malloc(sizeof(pthread_t));
-	//solicitudes = (struct solicitud *)malloc(sizeof(struct solicitud));
+	atendedores = (struct atendedor *)malloc(sizeof(struct atendedor)*(numeroAtendedores));
 	int siguiente;
 	struct sigaction sLlegaSolicitud;
 	sLlegaSolicitud.sa_handler = nuevaSolicitud;//Se asigna la manejadora nuevaSolicitud a la estrutura sigaction
 
 
-	siguiente= posicionSiguiente(ATENDEDOR);
-	(*(atendedores+siguiente)).id = generadorID(ATENDEDOR);
-	(*(atendedores+siguiente)).tipo = INVITACION;
-	(*(atendedores+siguiente)).numSolicitudes = 0;
-	pthread_create(&(*(atendedores+siguiente)).tid, NULL, accionesAtendedor, &*(atendedores+siguiente));
+	//Inicializamos los id de las solicitudes a -1 para comprobar la posicion siguiente mas adelante
 
-	siguiente= posicionSiguiente(ATENDEDOR);
-	(*(atendedores+siguiente)).id = generadorID(ATENDEDOR);
-	(*(atendedores+siguiente)).tipo = QR;
-	(*(atendedores+siguiente)).numSolicitudes = 0;
-	pthread_create(&(*(atendedores+siguiente)).tid, NULL, accionesAtendedor, &*(atendedores+siguiente));
-
-	for(i=3;i<=numeroAtendedores;i++){
-		siguiente= posicionSiguiente(ATENDEDOR);
-		(*(atendedores+siguiente)).id = generadorID(ATENDEDOR);
-		(*(atendedores+siguiente)).tipo = PRO;
-		(*(atendedores+siguiente)).numSolicitudes = 0;
-		pthread_create(&(*(atendedores+siguiente)).tid, NULL, accionesAtendedor, &*(atendedores+siguiente));
+	for(int i = 0; i < TAMCOLADEFECTO; i++){
+		cola[i].id = -1;
 	}
+
+
+	//CREAMOS LOS ATENDEDORES
+	nuevoAtendedor(INVITACION);
+
+	nuevoAtendedor(QR);
+
+	for(int i=3;i<=numeroAtendedores;i++){
+		nuevoAtendedor(PRO);
+	}
+
 
 	if(sigaction(SIGINT, &sLlegaSolicitud, NULL) == -1){ //Enmascaramos la senal SIGUSR1 (a partir de ahora se llamara a nuevaSolicitud cuando reciba SIGUSR1)
 		perror("Error al comunicar la llegada de una nueva solicitud");
@@ -216,7 +284,7 @@ int main(int argc, char *argv[]){
 		pause();
 
 	printf("Una vez creados todos las solicitudes, esto es lo que tenemos en el sistema:\n\n");
-	for(int i=0; i<posicionSiguiente(SOLICITUDES)-1; i++){
+	for(int i=0; i<posicionSiguiente(SOLICITUD)-1; i++){
 		printf("-----------------------------------------\n");
 		printf("ID --> %d\n", (*(cola+i)).id);
 		printf("ATENDIDO --> %d\n", (*(cola+i)).atendido);
@@ -239,18 +307,35 @@ int main(int argc, char *argv[]){
 	//rerurn 0;
 }
 
+
+/*
+* FUNCION QUE CREA LOS ATENDEDORES SEGUN EL TIPO QUE SEAN
+*/
+void nuevoAtendedor(int tipo){
+
+	int siguiente;
+
+	siguiente= posicionSiguiente(ATENDEDOR);
+	(*(atendedores+siguiente)).id = generadorID(ATENDEDOR);
+	(*(atendedores+siguiente)).tipo = tipo;
+	(*(atendedores+siguiente)).numSolicitudes = 0;
+	pthread_create(&(*(atendedores+siguiente)).tid, NULL, accionesAtendedor, &*(atendedores+siguiente));
+
+}
+
+	
 void nuevaSolicitud(int sig){
-	int siguiente= posicionSiguiente(SOLICITUDES);
+	int siguiente= posicionSiguiente(SOLICITUD);
 	//LO PRIMERO QUE HAY QUE COMPROBAR ES SI HAY HUECO PARA ENTRAR EN LA COLA
-	if(posicionSiguiente(SOLICITUDES)==tamCola){
+	if(posicionSiguiente(SOLICITUD)==tamCola){
 		//LOG
 	}
 	else{
 
-		(*(cola+siguiente)).id = generadorID(SOLICITUDES);
+		(*(cola+siguiente)).id = generadorID(SOLICITUD);
 		(*(cola+siguiente)).atendido = false;
 		(*(cola+siguiente)).descartado = false;
-		(*(cola+siguiente)).encolado = false;
+
 		if(sig == SIGINT){ //SIGUSR1 -- invitación
 			(*(cola+siguiente)).tipo = INVITACION;
 			pthread_create(&(*(cola+siguiente)).tid, NULL, sol, &*(cola+siguiente));
@@ -266,10 +351,12 @@ void nuevaSolicitud(int sig){
 }
 
 int posicionSiguiente(int tipoCola){
+
+
 	int i=0;
 	switch(tipoCola){
 		case 0://Cola solicitudes
-			while(cola[i].id!=NULL){
+			while(cola[i].id != -1){
 				i++;
 			}
 			if(i>=tamCola){
@@ -279,7 +366,7 @@ int posicionSiguiente(int tipoCola){
 			break;
 		case 1://Cola atendedores
 			i=0;
-			while(atendedores[i].id!=NULL){
+			while(atendedores[i].id != -1){
 				i++;
 			}
 			if(i>=numeroAtendedores){
@@ -297,7 +384,7 @@ int calculaAleatorio(int min, int max){
 }
 
 int generadorID(int tipo){
-	if(tipo=SOLICITUDES)
+	if(tipo=SOLICITUD)
 		return idAtendedor++;
 	else
 		return idSolicitud++;

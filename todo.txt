@@ -7,13 +7,14 @@ IDENTIFICADORES:
       D: Diego Simon Gonzalez
       
 
-D - Poner en marcha el repositorio de GitHub y subir los primeros ficheros
-D - Actualizacion de los identificadores y normativa sobre GitHub
+D - Poner en marcha el repositorio de GitHub y subir los primeros ficheros.
+D - Actualizacion de los identificadores y normativa sobre GitHub.
 A - Actualizacion definitiva de la normativa y division de la misma en apartados.
 B - Estructura de la practica con comentarios en el archivo .c de la practica.
-Declarar las variables globales (semaforos, colas, contadores, etc) para que los miembros del grupo puedan empezar a trabajar
+Declarar las variables globales (semaforos, colas, contadores, etc) para que los miembros del grupo puedan empezar a trabajar.
 A - Inicio de la práctica. Creacion de los hilos con estructuras asignadas. Pruebas con otras
 senyales.
-P - Actualización del fichero de pruebas
-D - Fusión del fichero de prueba con el fichero de la práctica definitiva
-P - Creados los atendedores sus estructuras,hilos etc. Y modificado metodos siguiente y generadorId.
+P - Actualización del fichero de pruebas.
+D - Fusión del fichero de prueba con el fichero de la práctica definitiva.
+* - Creados los atendedores sus estructuras, hilos etc. Y modificado metodos siguiente y generadorId.
+* - Creado codigo de los atendedores, refactorizado el codigo de la creacion de los atendedores y solucionados errores de codigo en distintos puntos del codigo.
