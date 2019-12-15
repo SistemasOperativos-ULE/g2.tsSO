@@ -128,27 +128,27 @@ int main(int argc, char *argv[]){
 	}
 
 
-	sLlegaSolicitud.sa_handler = nuevaSolicitud;//Se asigna la manejadora nuevaSolicitud a la estrutura sigaction 
+	sLlegaSolicitud.sa_handler = nuevaSolicitud;
 
-	if(sigaction(SIGUSR1, &sLlegaSolicitud, NULL) == -1){ //Enmascaramos la senal SIGUSR1 (a partir de ahora se llamara a nuevaSolicitud cuando reciba SIGUSR1)
+	if(sigaction(SIGUSR1, &sLlegaSolicitud, NULL) == -1){
 		perror("Error al comunicar la llegada de una nueva solicitud");
 		exit(-1);
 	}
 
-	if(sigaction(SIGUSR2, &sLlegaSolicitud, NULL) == -1){ //Enmascaramos la senal SIGUSR1 (a partir de ahora se llamara a nuevaSolicitud cuando reciba SIGUSR2)
+	if(sigaction(SIGUSR2, &sLlegaSolicitud, NULL) == -1){ 
 		perror("Error al comunicar la llegada de una nueva solicitud");
 		exit(-1);
 	}
 
 
-	sFinalizar.sa_handler = acabarPrograma;//Se asigna la manejadora acabarPrograma a la estrutura sigaction 
+	sFinalizar.sa_handler = acabarPrograma;
 	
-	if(sigaction(SIGINT, &sFinalizar, NULL) == -1){ //Enmascaramos la senal SIGINT (a partir de ahora se llamara a acabarPrograma cuando reciba SIGINT)
+	if(sigaction(SIGINT, &sFinalizar, NULL) == -1){
 		perror("Error al comunicar la finalizacion del programa");
 		exit(-1);
 	}
 
-	while(fin==false){
+	while(fin==false){ //TODO ES ESTA LA MEJOR OPCION?
 		pause();
 	}
 
@@ -181,16 +181,20 @@ void nuevaSolicitud(int sig){
 	*
 	**/
 
-	int siguiente= posicionSiguiente();
+	int siguiente;
+
+	//TODO entrar EM
+
+	siguiente = posicionSiguiente();
 
 	if(posicionSiguiente()==tamCola){
-		//LOG
+		//TODO log la cola esta llena, no puede entrar una nueva
 	}else{
 
 		(*(cola+siguiente)).id = ++id;
 		(*(cola+siguiente)).atendido = false;
 		(*(cola+siguiente)).descartado = false;
-		if(sig == SIGINT){ //SIGUSR1 -- invitación
+		if(sig == SIGUSR1){ //SIGUSR1 -- invitación
 			(*(cola+siguiente)).tipo = INVITACION;
 			pthread_create(&(*(cola+siguiente)).tid, NULL, imprimeDatosSolicitud, &*(cola+siguiente));
 
@@ -199,6 +203,8 @@ void nuevaSolicitud(int sig){
 			pthread_create(&(*(cola+siguiente)).tid, NULL, imprimeDatosSolicitud, &*(cola+siguiente));
 		}
 	}
+
+	//TODO salir EM
 
 }
 
@@ -237,8 +243,55 @@ void accionesSolicitud(){
 	*
 	**/
 
+	//TODO entrar EM
+	//TODO log: hora de entrada + tipo de solicitud
+	//TODO salir EM
 
-}
+	/*while(descatrado  false){ //TODO comprobar si esa es la condicion que hay que poner en el while
+		if(noEstoySiendoAtendido){
+			if(descartado==true){
+				//se va
+				//TODO entrar EM
+				//log
+				//TODO salir EM
+
+				//acaba el hilo
+
+				//TODO entrar EM
+				//TODO desencolar
+				//TODO salir EM
+			}else{
+				sleep(4);
+			}
+		}else{
+			//Hay que entra en EM??
+			pthread_cond_wait(&hanAcabadoDeAtenderme,&mutex); //Creo que no es VC porque ni veo que tenga que estar asociada a mutex
+			if(calculaAleatorio(1,100)<=50){ //Decide articipar en la actividad
+				if(!estaLleno(colaActividadSocial)){ //Puede participar
+					//TODO entra EM entra
+					//colaActividadSocial[posicionSiguiente()] = this??
+					if(estaLleno(colaActividadSocial)){
+						//avisa coordinador
+						//libera cola
+						//log: estamos preparados para comenzar la actividad
+					}
+
+					pthread_cond_wait(&comienzaActividad,&mutex);
+					sleep(3); //El disenyo de Conde dice esto, se supone que los 4 que realizan la actividad estan esperando en el wait y cuando reciben un signal hacen sleep todos?
+					pthread_cond_signal(&comienzaActividad);
+					//El ultimo avisa al coordinador
+					//EM se avisa de que se deja la actividad
+				}else{ //No puede  participar en la actividad
+					sleep(3);
+				}
+
+		}
+	}
+
+	//FIN hilo usuario
+
+
+}*/
 
 
 
