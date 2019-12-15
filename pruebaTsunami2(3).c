@@ -375,7 +375,6 @@ int posicionSiguiente(int tipoCola){
 			}
 			break;
 	}
-	
 	return i;
 	
 }
@@ -386,7 +385,7 @@ int calculaAleatorio(int min, int max){
 }
 
 int generadorID(int tipo){
-	if(tipo=SOLICITUD)
+	if(tipo == ATENDEDOR)
 		return idAtendedor++;
 	else
 		return idSolicitud++;
