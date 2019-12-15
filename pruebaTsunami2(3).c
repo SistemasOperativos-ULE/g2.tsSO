@@ -81,7 +81,7 @@ void *sol(void *arg){ //Funcion que ejecutan los hilos al crearse
 		if (descartar(s->tipo)== false)
 			sleep(3);
 		else{
-			borrarEstructura(&s);
+			//borrarEstructura(&s);
 			//Eliminamos el hilo con el exit
 			pthread_exit(NULL);
 		}
@@ -102,13 +102,13 @@ void *sol(void *arg){ //Funcion que ejecutan los hilos al crearse
 
 	if(s->clase == ANTECEDENTES){ //Este tipo de solicitud no puede participar en actividades sociales, asique se va pa su casa
 		//Inicializamos todos los parametros de la estructura del hilo a cero
-		borrarEstructura(&s);
+		//borrarEstructura(&s);
 		//Eliminamos el hilo con el exit
 		pthread_exit(NULL);
 
 	}else if(calculaAleatorio(0, 1)==0){ //NO QUIERE PARTICIPAR
 		//Inicializamos todos los parametros de la estructura del hilo a cero
-		borrarEstructura(&s);
+		//borrarEstructura(&s);
 		//Eliminamos el hilo con el exit
 		pthread_exit(NULL);
 
@@ -352,29 +352,31 @@ void nuevaSolicitud(int sig){
 
 int posicionSiguiente(int tipoCola){
 
-
-	int i=0;
+	int i=-1;
+	bool encontrado = false;
 	switch(tipoCola){
 		case 0://Cola solicitudes
-			while(cola[i].id != -1){
-				i++;
+			while(i < tamCola && !encontrado){
+				if(cola[i].id == -1){
+					encontrado = true;
+				}else{
+					i++;
+				}
 			}
-			if(i>=tamCola){
-				i=-1;
-			}
-			return i;
 			break;
 		case 1://Cola atendedores
 			i=0;
-			while(atendedores[i].id != -1){
-				i++;
+			while(i < numeroAtendedores && !encontrado){
+				if(atendedores[i].id == -1){
+					encontrado = true;
+				}else{
+					i++;
+				}
 			}
-			if(i>=numeroAtendedores){
-				i=-1;
-			}
-			return i;
 			break;
 	}
+	
+	return i;
 	
 }
 

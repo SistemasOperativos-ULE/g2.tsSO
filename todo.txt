@@ -18,3 +18,4 @@ P - Actualización del fichero de pruebas.
 D - Fusión del fichero de prueba con el fichero de la práctica definitiva.
 * - Creados los atendedores sus estructuras, hilos etc. Y modificado metodos siguiente y generadorId.
 * - Creado codigo de los atendedores, refactorizado el codigo de la creacion de los atendedores y solucionados errores de codigo en distintos puntos del codigo.
+* - Solucionado error en la funcion posicionSiguiente que daba un core dumped (la busqueda estaba mal hecha)
