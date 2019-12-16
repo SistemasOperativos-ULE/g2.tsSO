@@ -19,14 +19,16 @@
 #define ANTECEDENTES 3
 #define SOLICITUD 0
 #define ATENDEDOR 1
+#define PORATENDER 0
+#define ATENDIENDO 1
+#define ATENDIDO 2
 
 struct solicitud{
 	int id;
 	int tipo; //INVITACION = 1; QR = 0
-	bool descartado; //Lo hemos anyadido nosotros
-	bool atendido;
+	int atendido; //posicion 0 sin atender, 1 siendo atendido, 2 ya ha sido atendido
 	pthread_t tid;
-	int clase; //Atencion correcta, errores en los datos o antecedentes policiales
+	int tipoDatos; //Atencion correcta, errores en los datos o antecedentes policiales
 };
 
 int idSolicitud = 1;
@@ -36,6 +38,7 @@ int tamCola = TAMCOLADEFECTO;
 //int numSolicitudes = 0; //contador que usamos para movernos entre las solicitudes, hilos, y las struct
 bool peticionSolicitudes = true;
 
+pthread_mutex_t datosSolicitud;
 
 struct atendedor{
 	int id;
@@ -57,65 +60,118 @@ int posicionSiguiente(int tipoCola);
 void nuevaSolicitud(int tipo);
 int calculaAleatorio(int min, int max);
 int generadorID(int tipo);
-void *sol(void *arg);
+void *accionesSolicitud(void *arg);
 bool descartar(int val);
 void borrarEstructura(void *args);
 void nuevoAtendedor(int tipo);
 int buscarSiguiente(int tipo);
 
 
-void *sol(void *arg){ //Funcion que ejecutan los hilos al crearse
+void *accionesSolicitud(void *arg){ //Funcion que ejecutan los hilos al crearse
+
+	/** EM GUARDAR EN EL LOG:
+	* 1- EM la hora de entrada
+	* 2- EM el tipo de solicitud
+	**/
+	//3-dormir 3 segundos
+
+	/** 
+	*4- estoy siendo atendido??
+	* if(noEstaSiendoAtendido){
+	*	5-calcular el comportamiento de la solicitud 
+	*		a-Si se va y  EM se escribe en el log, se acaba el hilo y EM se libera espacio en la cola
+	*		b-Sino duerme 4 segundos y vuelve al punto 4
+	*}else{
+	*	6- Esperamos a que termine de ser atendido
+	*	7- Calculamos si decide o no participar en una actividad social
+	*	8 if(decideParticipar){
+	*		a. EM if(puedeEntrar en la lista){
+	*			EM entra, si es el ultimo avisa al cordinateur, libera espacio en cola, guardamos log de que esta preparado para actividad
+	*			VC se queda esperando a poder comenzar, NADA duerme 3 segundos, VC sale de la cola y el ultimo avisa al coordinateur
+	*			EM guardamos el log en el que deja la actividad
+	*		b. else, espera 3 segundos y vuelve a a
+	*	9- }else{
+	*			EM Libera su posicion en cola de solicitudes y se va, escribe en el log
+	*	   }
+	*	10- Fin del hilo de usuario
+	*
+	**/
+
+
 	struct solicitud *s; //la estructura a la que apunta el puntero que le pasamos al hilo
 	s = (struct solicitud *) arg;
 
-	//imprimimos los datos que tiene la estructura asociada al hilo
+	pthread_mutex_lock(&datosSolicitud);
+
+		//imprimimos los datos que tiene la estructura asociada al hilo
 	printf("Soy una solicitud, y mi id es %d\n", (*s).id);
 	if(s->tipo == INVITACION)
 		printf("Soy de tipo Invitación\n");
 	else
 		printf("Soy de tipo QR\n");
-	printf("Atendido = %d y descartado = %d\n", s->atendido, s->descartado);
-	
+	printf("Atendido = %d", s->atendido);
+
+	pthread_mutex_unlock(&datosSolicitud);
+
+	//TODO Guardar en el log
+
+	sleep(4);
+
 	//Ahora viene la parte en la que la solicitud comprueba cada 3 segundos si ha sido aceptada o rechazada
-	while(s->descartado == false && s->atendido == false){
-		if (descartar(s->tipo)== false)
+
+	//DUUUUUUUUUUUUUUDAAAAAAAAAAAAAAAAAAAA
+	pthread_mutex_lock(&datosSolicitud);
+	while(s->atendido == PORATENDER){
+		//Comprobamos el comportamiento de la solicitud
+		if (descartar(s->tipo)== false){
 			sleep(3);
-		else{
-			//borrarEstructura(&s);
+		} else{
+			borrarEstructura(&s);
 			//Eliminamos el hilo con el exit
 			pthread_exit(NULL);
 		}
 	}
+	pthread_mutex_unlock(datosSolicitud);
+
+	
+	//OJO A COMO SE HACE ESTA ESPERA
+	//TOOOODOOOOOOOOOO
+	while(s->atendido == ATENDIENDO){
+		sleep(1);	
+	}
+	//ESPERA ACTIVAAAAAAA, CUIDADO, hacer semaforo, variable condicion?
+
+	//Ya ha sido atendido
+
 
 
 	//Cuando sale del while es que tiene uno de los 2 a true
 	//aqui el atendedor ya ha seteado la clase de solicitud que somos
-	if(s->clase==ATENCIONCORRECTA)
+	if(s->tipoDatos==ATENCIONCORRECTA)
 		printf("Mis datos estan correctos\n");
-	else if(s->clase==ERRORESDATOS)
+	else if(s->tipoDatos==ERRORESDATOS)
 		printf("Mis datos estan con errores\n");
-	else if(s->clase==ANTECEDENTES)
+	else if(s->tipoDatos==ANTECEDENTES)
 		printf("TENGO ANTECEDENTES!!\n");
 
 	//      TTTTTTTTTTTTTTOOOOOOOOOOOOOODDDDDDDDDDDDDDDDDDDDDDOOOOOOOOOOOOOOO
 	// AQUI HAY QUE ESPERAR A QUE ACABE DE SER ATENDIDO
-
-	if(s->clase == ANTECEDENTES){ //Este tipo de solicitud no puede participar en actividades sociales, asique se va pa su casa
+-
+	if(s->tipoDatos == ANTECEDENTES){ //Este tipo de solicitud no puede participar en actividades sociales, asique se va pa su casa
 		//Inicializamos todos los parametros de la estructura del hilo a cero
-		//borrarEstructura(&s);
+		borrarEstructura(&s);
 		//Eliminamos el hilo con el exit
 		pthread_exit(NULL);
 
-	}else if(calculaAleatorio(0, 1)==0){ //NO QUIERE PARTICIPAR
+	}else if(calculaAleatorio(0, 1) == 0){ //NO QUIERE PARTICIPAR
 		//Inicializamos todos los parametros de la estructura del hilo a cero
-		//borrarEstructura(&s);
+		borrarEstructura(&s);
 		//Eliminamos el hilo con el exit
 		pthread_exit(NULL);
 
 	}else{
-		//TOOOOOOODOOOOOOOOOOOOOOOOOOOOO
-		//SI QUIERE PARTICIPAR
-		//TODO: ESPERAR A LA COLA VACIA
+		//TODO actividad social
+		
 	}
 
 	//-->NO , SE EXPULSA
@@ -123,6 +179,19 @@ void *sol(void *arg){ //Funcion que ejecutan los hilos al crearse
 	//TO DO//wait(coordinador.me.mata.o.coordinador.me.mata)
 	
 	pthread_exit(NULL);
+}
+
+int obtenerTipoDatos(struct solicitud *s;){
+	int tipoDatos;
+
+	pthread_mutex_lock(datosSolicitud);
+
+	tipoDatos = s->tipoDatos;
+
+	pthread_mutex_unlock(datosSolicitud);
+
+	return tipoDatos;
+
 }
 
 void *accionesAtendedor(void *arg){
@@ -145,17 +214,17 @@ void *accionesAtendedor(void *arg){
 		aleatorio = calculaAleatorio(1,10);
 
 		if(aleatorio <= 7){
-			cola[solicitudAatender].clase = ATENCIONCORRECTA;
+			cola[solicitudAatender].tipoDatos = ATENCIONCORRECTA;
 			tiempoAtencion = calculaAleatorio(1,4);
 		}else if(aleatorio <= 9){
-			cola[solicitudAatender].clase = ERRORESDATOS;
+			cola[solicitudAatender].tipoDatos = ERRORESDATOS;
 			tiempoAtencion = calculaAleatorio(2,6);
 		}else{
-			cola[solicitudAatender].clase = ANTECEDENTES;
+			cola[solicitudAatender].tipoDatos = ANTECEDENTES;
 			tiempoAtencion = calculaAleatorio(6,10);
 		}
 
-		cola[solicitudAatender].atendido = true;
+		cola[solicitudAatender].atendido = ATENDIDO;
 
 		sleep(tiempoAtencion);
 
@@ -195,7 +264,7 @@ int buscarSiguiente(int tipo){
 		switch(tipo){
 			case PRO:
 				while(!busquedaTerminada){
-					if(cola[i].descartado == false && cola[i].atendido == false){
+					if(cola[i].atendido == PORATENDER){
 						encontrado = i;
 						busquedaTerminada = true;
 					}else{
@@ -206,7 +275,7 @@ int buscarSiguiente(int tipo){
 
 			default:
 				while(!busquedaTerminada){
-					if(cola[i].descartado == false && cola[i].atendido == false && cola[i].tipo == tipo){
+					if(cola[i].atendido == PORATENDER && cola[i].tipo == tipo){
 						encontrado = i;
 						busquedaTerminada = true;
 					}else{
@@ -231,7 +300,6 @@ void borrarEstructura(void *args){
 	s->id = -1;
 	s->tipo = -1;
 	s->aceptado = false;
-	s->descartado = false;
 	s->atendido = false;
 	s->tid = NULL;*/
 
@@ -240,28 +308,9 @@ void borrarEstructura(void *args){
 }
 
 int main(int argc, char *argv[]){
-	cola = (struct solicitud *)malloc(sizeof(struct solicitud)*(TAMCOLADEFECTO));
-	atendedores = (struct atendedor *)malloc(sizeof(struct atendedor)*(numeroAtendedores));
 	int siguiente;
 	struct sigaction sLlegaSolicitud;
 	sLlegaSolicitud.sa_handler = nuevaSolicitud;//Se asigna la manejadora nuevaSolicitud a la estrutura sigaction
-
-
-	//Inicializamos los id de las solicitudes a -1 para comprobar la posicion siguiente mas adelante
-
-	for(int i = 0; i < TAMCOLADEFECTO; i++){
-		cola[i].id = -1;
-	}
-
-
-	//CREAMOS LOS ATENDEDORES
-	nuevoAtendedor(INVITACION);
-
-	nuevoAtendedor(QR);
-
-	for(int i=3;i<=numeroAtendedores;i++){
-		nuevoAtendedor(PRO);
-	}
 
 
 	if(sigaction(SIGINT, &sLlegaSolicitud, NULL) == -1){ //Enmascaramos la senal SIGUSR1 (a partir de ahora se llamara a nuevaSolicitud cuando reciba SIGUSR1)
@@ -278,10 +327,39 @@ int main(int argc, char *argv[]){
 		perror("Error al comunicar la llegada de una nueva solicitud");
 		exit(-1);
 	}
-	
 
-	while(peticionSolicitudes == true)
+	//TODO enmascarar SIGPIPE que aumente numero de atendedores
+
+	//TODO inicializar fichero de logs
+
+	cola = (struct solicitud *)malloc(sizeof(struct solicitud)*(TAMCOLADEFECTO));
+	atendedores = (struct atendedor *)malloc(sizeof(struct atendedor)*(numeroAtendedores));
+	//Inicializamos los id de las solicitudes a -1 para comprobar la posicion siguiente mas adelante
+
+	idSolicitud = 1;
+	tamCola = TAMCOLADEFECTO;
+	peticionSolicitudes = true;
+	idAtendedor= 1;
+	numeroAtendedores = 3;
+
+	for(int i = 0; i < TAMCOLADEFECTO; i++){
+		cola[i].id = -1;
+	}
+
+	//CREAMOS LOS ATENDEDORES
+	nuevoAtendedor(INVITACION);
+
+	nuevoAtendedor(QR);
+
+	for(int i=3;i<=numeroAtendedores;i++){
+		nuevoAtendedor(PRO);
+	}
+	
+	//TODO crear coordinador
+
+	while(peticionSolicitudes == true){
 		pause();
+	}
 
 	printf("Una vez creados todos las solicitudes, esto es lo que tenemos en el sistema:\n\n");
 	for(int i=0; i<posicionSiguiente(SOLICITUD)-1; i++){
@@ -292,7 +370,6 @@ int main(int argc, char *argv[]){
 			printf("TIPO --> QR\n");
 		else
 			printf("TIPO --> Invitación\n");
-		printf("descartado --> %d\n", (*(cola+i)).descartado);
 	}
 	printf("-----------------------------------------\n\n");
 	/*for(int i=0; i<numSolicitudes; i++){
@@ -303,8 +380,8 @@ int main(int argc, char *argv[]){
 
 	//pthread_join(*(hilos+0), NULL);
 	//printf("Hilo 1 muerto\n");
-	pthread_exit(NULL);
-	//rerurn 0;
+	//pthread_exit(NULL);
+	return 0;
 }
 
 
@@ -333,16 +410,15 @@ void nuevaSolicitud(int sig){
 	else{
 
 		(*(cola+siguiente)).id = generadorID(SOLICITUD);
-		(*(cola+siguiente)).atendido = false;
-		(*(cola+siguiente)).descartado = false;
+		(*(cola+siguiente)).atendido = PORATENDER;
 
 		if(sig == SIGINT){ //SIGUSR1 -- invitación
 			(*(cola+siguiente)).tipo = INVITACION;
-			pthread_create(&(*(cola+siguiente)).tid, NULL, sol, &*(cola+siguiente));
+			pthread_create(&(*(cola+siguiente)).tid, NULL, accionesSolicitud, &*(cola+siguiente));
 
 		}else if(sig == SIGQUIT){ //SIGUSR2 -- QR
 			(*(cola+siguiente)).tipo = QR;
-			pthread_create(&(*(cola+siguiente)).tid, NULL, sol, &*(cola+siguiente));
+			pthread_create(&(*(cola+siguiente)).tid, NULL, accionesSolicitud, &*(cola+siguiente));
 
 		}else if(sig == SIGTSTP){
 			peticionSolicitudes = false;
@@ -352,8 +428,12 @@ void nuevaSolicitud(int sig){
 
 int posicionSiguiente(int tipoCola){
 
-	int i=-1;
-	bool encontrado = false;
+	int i;
+	bool encontrado;
+
+	//pthread_mutex_lock();
+	i=-1;
+	encontrado = false;
 	switch(tipoCola){
 		case 0://Cola solicitudes
 			while(i < tamCola && !encontrado){
@@ -375,6 +455,7 @@ int posicionSiguiente(int tipoCola){
 			}
 			break;
 	}
+	//pthread_mutex_unlock();
 	return i;
 	
 }
@@ -396,19 +477,23 @@ bool descartar(int val){
 	bool expulsar = false;
 
 	if(val == QR){
-		if(calculaAleatorio(1, 10)<=3) //Un 30% se descartan
+		if(calculaAleatorio(1, 10)<=3){ //Un 30% se descartan
 			expulsar=true;
-		else
-			if(calculaAleatorio(1, 100)<=15) //Un 15% del resto se descartan
+		}else{
+			if(calculaAleatorio(1, 100)<=15){ //Un 15% del resto se descartan
 				expulsar=true;
+			}
+		}
 	}
 
 	if(val == INVITACION){
-		if(calculaAleatorio(1, 10)<=1) //Un 10% se descartan
+		if(calculaAleatorio(1, 10)<=1){ //Un 10% se descartan
 			expulsar=true;
-		else
-			if(calculaAleatorio(1, 100)<=15) //Un 15% del resto se descartan
+		}else{
+			if(calculaAleatorio(1, 100)<=15){ //Un 15% del resto se descartan
 				expulsar=true;
+			}
+		}
 	}
 
 	return expulsar;
