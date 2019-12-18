@@ -513,7 +513,6 @@ int posicionSiguiente(int tipoCola){
 	//pthread_mutex_unlock();
 	printf("El tipo de cola %d da posicion %d\n", tipoCola, i);
 	return i;
-	
 }
 
 int calculaAleatorio(int min, int max){

@@ -30,9 +30,11 @@
 #define ANTECEDENTES 3
 #define SOLICITUD 0
 #define ATENDEDOR 1
+#define ACTIVIDADSOCIAL 2
 #define PORATENDER 0
 #define ATENDIENDO 1
 #define ATENDIDO 2
+#define TAMACTIVIDAD 4
 
 
 /**
@@ -56,6 +58,12 @@ int tamCola;
 
 pthread_mutex_t datosSolicitud;
 
+pthread_mutex_t actividadSocial;
+
+pthread_cond_t sePuedeEmpezar;
+
+pthread_cond_t actividadAcabada;
+
 struct atendedor{
 	int id;
 	int tipo; //INVITACION = 1; QR = 0, PRO=3;
@@ -70,7 +78,7 @@ int numeroAtendedores;
 //Contador de solicitudes
 struct solicitud *cola; //El tamanyo en principio es 15, pero puede variar
 
-struct solicitud colaActividadSocial[4]; //TODO
+struct solicitud colaActividadSocial[TAMACTIVIDAD]; //TODO
 
 FILE *registroTiempos;
 
@@ -89,7 +97,7 @@ void *accionesCoordinadorSocial(void *arg);
 void writeLogMessage(char *id, char *msg);
 int calculaAleatorio(int min, int max);
 void acabarPrograma(int sig);
-//void compactar(); TODO rehacer
+void compactar(); TODO rehacer
 void imprimeEstado();
 int posicionSiguiente(int tipoCola);
 void nuevoAtendedor(int tipo);
@@ -97,6 +105,7 @@ int generadorID(int tipo);
 bool descartar(int val);
 void borrarEstructura(void *args);
 int buscarSiguiente(int tipo);
+void borrarDeLaCola(int id);
 
 
 
@@ -156,6 +165,27 @@ int main(int argc, char *argv[]){
 		numeroAtendedores = 3;
 	}
 
+	
+	if(pthread_mutex_init(&datosSolicitud, NULL) != 0) {
+		//Error en la inicializacion del mutex
+		exit(-1);
+	}
+
+	if(pthread_mutex_init(&actividadSocial, NULL) != 0) {
+		//Error en la inicializacion del mutex
+		exit(-1);
+	}
+
+	if(pthread_cond_init(&sePuedeEmpezar,NULL) != 0){
+		//Error en la inicializacion del mutex
+		exit(-1);
+	}
+
+	if(pthread_cond_init(&actividadAcabada,NULL) != 0){
+		//Error en la inicializacion del mutex
+		exit(-1);
+	}
+
 	idSolicitud = 1;
 	fin = false;
 	idAtendedor= 1;
@@ -181,6 +211,8 @@ int main(int argc, char *argv[]){
 		pause();
 	}
 
+
+	//TODO LIBERAR TODOS LOS PUNTEROS, DESTRUIR MUTEX, ETC
 	free(cola);
 
 	printf("Todo esta cumplido, podemos cerrar\n");
@@ -293,6 +325,8 @@ void *accionesSolicitud(void *arg){ //Funcion que ejecutan los hilos al crearse
 
 	struct solicitud *solicitudActual; //la estructura a la que apunta el puntero que le pasamos al hilo
 	solicitudActual = (struct solicitud *) arg;
+	int siguienteActSoc;
+	int contadorActividad = 0;
 
 	pthread_mutex_lock(&datosSolicitud);
 
@@ -326,7 +360,7 @@ void *accionesSolicitud(void *arg){ //Funcion que ejecutan los hilos al crearse
 	//pthread_mutex_unlock(datosSolicitud);
 
 	
-	//TODO como se hace esta espera? hacer semaforo, variable condicion?
+	//TODO eespera activa? variable condicion? que pasa con la variable condicion cuando ha varios que estan haciendo esta espera a la vez?
 	while(solicitudActual->atendido == ATENDIENDO){
 		sleep(1);	
 	}
@@ -357,8 +391,49 @@ void *accionesSolicitud(void *arg){ //Funcion que ejecutan los hilos al crearse
 		pthread_exit(NULL);
 
 	}else{
-		//TODO actividad social
+		//TODO Quiere participar en una actividad social
+		pthread_mutex_lock(&actividadSocial);
+		do{
+			siguienteActSoc = posicionSiguiente(ACTIVIDADSOCIAL);
+			if(siguienteActSoc == -1){
+				//No puede entrar a la actividad social
+				sleep(3);
+			}
+		}while(siguienteActSoc == -1)
+
+		//Aqui ya puede entrar a la actividad social
+
+		colaActividadSocial[siguienteActSoc] = *solicitudActual;
+
+		if(siguienteActSoc == TAMACTIVIDAD){
+			pthread_cond_signal(&actividadAcabada);
+		}
 		
+		pthread_mutex_unlock(&actividadSocial);
+
+
+		pthread_mutex_lock(&datosSolicitud);
+
+		borrarDeLaCola(solicitudActual.id);
+
+		pthread_mutex_unlock(&datosSolicitud);
+
+		//TODO escribir en el log que estoy preparado para la actividad
+
+		pthread_mutex_lock(&actividadSocial);
+
+		pthread_cond_wait(&sePuedeEmpezar, &actividadSocial);
+
+		//Esto es la actividad basicamente, dormir
+		sleep(3);
+
+		if(){
+
+		}
+
+
+
+
 	}
 
 	//-->NO , SE EXPULSA
@@ -516,8 +591,27 @@ void acabarPrograma(int sig){
 }*/
 
 
-/*void compactar(){
-	int i=0, j=0, siguiente = posicionSiguiente();
+void borrarDeLaCola(int id){
+	bool encontrado = false;
+	int i = 0;
+
+	while(i < tamCola && !encontrado){
+		if(cola[i].id == id){
+			cola[i].id = -1;
+			encontrado = true;
+		}else{
+			i++;
+		}
+	}
+
+	compactar(i);
+}
+
+void compactar(int posicion){
+
+	//TODO Rediseniar este codigo 
+
+	int i=0, j=0, siguiente = posicionSiguiente(SOLICITUD);
 
 	while(i<siguiente){
 		if(cola[i]==NULL){
@@ -530,7 +624,7 @@ void acabarPrograma(int sig){
 		}
 		i++;
 	}
-}*/
+}
 
 
 int posicionSiguiente(int tipoCola){
@@ -539,7 +633,7 @@ int posicionSiguiente(int tipoCola){
 	bool encontrado;
 
 	//pthread_mutex_lock();
-	i=-1;
+	i = 0;
 	encontrado = false;
 	switch(tipoCola){
 		case 0://Cola solicitudes
@@ -550,9 +644,12 @@ int posicionSiguiente(int tipoCola){
 					i++;
 				}
 			}
+
+			if(i == tamCola){
+				i = -1;
+			}
 			break;
 		case 1://Cola atendedores
-			i=0;
 			while(i < numeroAtendedores && !encontrado){
 				if(atendedores[i].id == -1){
 					encontrado = true;
@@ -560,11 +657,29 @@ int posicionSiguiente(int tipoCola){
 					i++;
 				}
 			}
+
+			if(i == numeroAtendedores){
+				i = -1;
+			}
+			break;
+
+		case 2:
+			while(i < TAMACTIVIDAD && !encontrado){
+				if(colaActividadSocial[i].id == -1){
+					encontrado = true;
+				}else{
+					i++;
+				}
+			}
+
+			if(i == TAMACTIVIDAD){
+				i = -1;
+			}
 			break;
 	}
 	//pthread_mutex_unlock();
+	printf("El tipo de cola %d da posicion %d\n", tipoCola, i);
 	return i;
-	
 }
 
 
