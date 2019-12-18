@@ -376,14 +376,14 @@ void *accionesSolicitud(void *arg){ //Funcion que ejecutan los hilos al crearse
 void *accionesAtendedor(void *arg){
 
 	//SI SE TRATA DE UN ATENDEDOR PRO ATENDERA A QUIEN MAS TIEMPO LLEVE INDEPENDIENTEMENTE DEL TIPO
-	struct atendedor *at = (struct atendedor *) arg;
+	struct atendedor *atendedorActual = (struct atendedor *) arg;
 	int solicitudAatender;
 	int aleatorio;
 	int tiempoAtencion;
 
 	while(true){
 
-		do{
+		do{ 
 			solicitudAatender = buscarSiguiente(at->tipo);
 			if(solicitudAatender == -1){
 				sleep(1);
@@ -409,7 +409,7 @@ void *accionesAtendedor(void *arg){
 
 		//TODO TENER EN CUENTA LOS DOS CAMBIOS DE FLAG DE ATENDIDO QUE PONE EL DISENIO
 
-		if(at->numSolicitudes % 5 == 0){
+		if(atendedorActual->numSolicitudes % 5 == 0){
 			//le toca tomar el cafe
 			sleep(10);
 		}
