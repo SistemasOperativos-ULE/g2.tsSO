@@ -284,6 +284,9 @@ void nuevaSolicitud(int sig){
 	*}
 	*
 	**/	
+
+	//TODO if(fin==true) no cogemos mas senyales
+
 	int siguiente= posicionSiguiente(SOLICITUD);
 	if(siguiente==-1){
 		printf("No se puede anyadir otra solicitud\n");
@@ -407,7 +410,7 @@ void *accionesSolicitud(void *arg){ //Funcion que ejecutan los hilos al crearse
 		pthread_exit(NULL);
 
 	}else{
-		//TODO Quiere participar en una actividad social
+		//TODO Hay que comprobar si fin==false para que no puedan entrar solicitudes a la cola de la actividad cuando ya se ha acabado el programa
 		pthread_mutex_lock(&actividadSocial);
 
 
@@ -442,13 +445,27 @@ void *accionesSolicitud(void *arg){ //Funcion que ejecutan los hilos al crearse
 		pthread_cond_wait(&empezadActividad, &actividadSocial);
 
 		//Esto es la actividad basicamente, dormir
-		sleep(3);
+		
 
-		if(contadorActividad == TAMACTIVIDAD){
-			pthread_cond_signal(&avisarCoordinador);
+		if(contador == 1){ //TODO buscar una opcion mejor de que en total se espere 3 segundos
+			sleep(3); 
 		}
 
+		//TODO borrar de la cola
+		
+		contador--;
+
+		if(contadorActividad == 0){
+			pthread_cond_signal(&avisarCoordinador); //Avisa de que ya han salido todos de la actividad
+		}
+
+		pthread_mutex_lock(&escribirLog);
 		//Escribir en el log que se ha acabado la actividad
+		pthread_mutex_unlock(&escribirLog);
+
+		pthread_mutex_unlock(&actividadSocial);
+
+
 
 
 
@@ -615,8 +632,20 @@ int calculaAleatorio(int min, int max){
 *
 **/
 void acabarPrograma(int sig){
+
+	//TODO 
+
+	if(fin){
+		printf("Ya se esta trabajando en cerrar el programa");
+		pthread_mutex_lock(&escribirLog);
+		//log de que ya estamos trabajando en cerrar el programa
+		pthrea_mutex_unlock(&escribirLog);
+	}else{
+		fin=true;
+	}
+
 	imprimeEstado();
-	fin = true;
+	
 }
 
 /**
