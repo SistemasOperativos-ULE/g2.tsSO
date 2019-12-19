@@ -56,13 +56,9 @@ int idSolicitud;
 //Inicialmente se pone al tamanio por defecto, puede que haya que cambiarlo en la parte extra de la practica (modificacion dinamica)
 int tamCola;
 
-pthread_mutex_t datosSolicitud;
+pthread_mutex_t datosSolicitud, actividadSocial, escribirLog;
 
-pthread_mutex_t actividadSocial;
-
-pthread_cond_t sePuedeEmpezar;
-
-pthread_cond_t actividadAcabada;
+pthread_cond_t actividadLlena, actividadAcabada;
 
 struct atendedor{
 	int id;
@@ -79,6 +75,9 @@ int numeroAtendedores;
 struct solicitud *cola; //El tamanyo en principio es 15, pero puede variar
 
 struct solicitud colaActividadSocial[TAMACTIVIDAD]; //TODO
+
+int contadorActividad;
+
 
 FILE *registroTiempos;
 
@@ -133,6 +132,7 @@ int main(int argc, char *argv[]){
 	//Esperar seniales de forma infinita
 
 	struct sigaction sLlegaSolicitud, sFinalizar;
+	pthread_t coordinador;
 
 	sLlegaSolicitud.sa_handler = nuevaSolicitud;
 
@@ -176,7 +176,7 @@ int main(int argc, char *argv[]){
 		exit(-1);
 	}
 
-	if(pthread_cond_init(&sePuedeEmpezar,NULL) != 0){
+	if(pthread_cond_init(&actividadLlena,NULL) != 0){
 		//Error en la inicializacion del mutex
 		exit(-1);
 	}
@@ -189,6 +189,7 @@ int main(int argc, char *argv[]){
 	idSolicitud = 1;
 	fin = false;
 	idAtendedor= 1;
+	contadorActividad = 0;
 
 	cola=(struct solicitud *)malloc(sizeof(struct solicitud)*(tamCola));
 	atendedores = (struct atendedor *)malloc(sizeof(struct atendedor)*(numeroAtendedores));
@@ -206,6 +207,8 @@ int main(int argc, char *argv[]){
 	for(int i=0;i<(numeroAtendedores-2);i++){
 		nuevoAtendedor(PRO);
 	}
+
+	pthread_create(&coordinador, NULL, accionesCoordinadorSocial, NULL);
 
 	while(fin==false){ //TODO ES ESTA LA MEJOR OPCION?
 		pause();
@@ -326,7 +329,6 @@ void *accionesSolicitud(void *arg){ //Funcion que ejecutan los hilos al crearse
 	struct solicitud *solicitudActual; //la estructura a la que apunta el puntero que le pasamos al hilo
 	solicitudActual = (struct solicitud *) arg;
 	int siguienteActSoc;
-	int contadorActividad = 0;
 
 	pthread_mutex_lock(&datosSolicitud);
 
@@ -393,20 +395,22 @@ void *accionesSolicitud(void *arg){ //Funcion que ejecutan los hilos al crearse
 	}else{
 		//TODO Quiere participar en una actividad social
 		pthread_mutex_lock(&actividadSocial);
+
 		do{
-			siguienteActSoc = posicionSiguiente(ACTIVIDADSOCIAL);
-			if(siguienteActSoc == -1){
+			if((contadorActividad >= (TAMACTIVIDAD-1)) || (puedeEntrar==false)){
 				//No puede entrar a la actividad social
 				sleep(3);
 			}
-		}while(siguienteActSoc == -1)
+		}while((contadorActividad >= (TAMACTIVIDAD-1)) || (puedeEntrar==false));
 
 		//Aqui ya puede entrar a la actividad social
 
-		colaActividadSocial[siguienteActSoc] = *solicitudActual;
+		colaActividadSocial[contadorActividad] = *solicitudActual; //TODO comprobar que se copia el contenido
 
-		if(siguienteActSoc == TAMACTIVIDAD){
-			pthread_cond_signal(&actividadAcabada);
+		contadorActividad++;
+
+		if(contadorActividad == TAMACTIVIDAD){
+			pthread_cond_signal(&actividadLlena);
 		}
 		
 		pthread_mutex_unlock(&actividadSocial);
@@ -422,7 +426,7 @@ void *accionesSolicitud(void *arg){ //Funcion que ejecutan los hilos al crearse
 
 		pthread_mutex_lock(&actividadSocial);
 
-		pthread_cond_wait(&sePuedeEmpezar, &actividadSocial);
+		pthread_cond_wait(&actividadLlena, &actividadSocial);
 
 		//Esto es la actividad basicamente, dormir
 		sleep(3);
@@ -507,6 +511,35 @@ void *accionesCoordinadorSocial(void *arg){
 	* 6- EM Abre la lista de nuevo y vuelve al paso 1
 	*
 	**/
+
+	while(fin==false){
+		pthread_mutex_lock(&actividadSocial);
+
+		pthread_cond_wait(&actividadLlena, &actividadSocial);
+		//TODO cierra la lista para que ninguno mas entre (candado=false)
+
+		pthread_cond_signal(&comienzoActividad);
+
+
+		pthread_mutex_lock(&escribirLog);
+		//TODO log comienza actividad
+		pthread_mutex_unlock(&escribirLog);
+
+
+		pthread_cond_wait(&actividadAcabada, &actividadSocial);
+
+		pthread_mutex_lock(&escribirLog);
+		//TODO log acaba actividad
+		pthread_mutex_unlock(&escribirLog);
+
+		//TODO abre la lista (candado=true)
+
+		pthread_mutex_unlock(&actividadSocial);
+
+
+	}
+
+
 
 }
 
@@ -607,23 +640,20 @@ void borrarDeLaCola(int id){
 	compactar(i);
 }
 
-void compactar(int posicion){
+void compactar(int posicionVacia){
 
-	//TODO Rediseniar este codigo 
+		bool acabado = false;
+		int i = posicionVacia;
 
-	int i=0, j=0, siguiente = posicionSiguiente(SOLICITUD);
+		while((i<tamCola-1) && (!acabado)){
+			cola[i] = cola[i+1];
 
-	while(i<siguiente){
-		if(cola[i]==NULL){
-			for(j=i; j<siguiente; j++) {
-				cola[i] = cola[i+1];
+			if(cola[++i].id==-1){
+				acabado=true;
+			}else{
+				cola[i].id = -1;
 			}
-			siguiente--;
-			cola[siguiente] = NULL;
-			i=siguiente;
 		}
-		i++;
-	}
 }
 
 
