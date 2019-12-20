@@ -333,7 +333,7 @@ void *accionesSolicitud(void *arg){ //Funcion que ejecutan los hilos al crearse
 	*		a. EM if(puedeEntrar en la lista){
 	*			EM entra, si es el ultimo avisa al cordinateur, libera espacio en cola, guardamos log de que esta preparado para actividad
 	*			VC se queda esperando a poder comenzar, NADA duerme 3 segundos, VC sale de la cola y el ultimo avisa al coordinateur
-	*			EM guardamos el log en el que deja la actividad
+	*			EM guardamos el log el que deja la actividad
 	*		b. else, espera 3 segundos y vuelve a a
 	*	9- }else{
 	*			EM Libera su posicion en cola de solicitudes y se va, escribe en el log
@@ -342,14 +342,28 @@ void *accionesSolicitud(void *arg){ //Funcion que ejecutan los hilos al crearse
 	*
 	**/
 
+	//TODO ojo con los mutex datosSolicitud en esta funcion
 
 	struct solicitud *solicitudActual; //la estructura a la que apunta el puntero que le pasamos al hilo
 	solicitudActual = (struct solicitud *) arg;
 	int siguienteActSoc;
+	char buffer[100], quienHabla[50];
+
 
 	pthread_mutex_lock(&datosSolicitud);
 
-		//imprimimos los datos que tiene la estructura asociada al hilo
+	pthread_mutex_lock(&escribirLog);
+	if(solicitudActual->tipo == QR){
+		sprintf(buffer, "Acabo de entrar en el sistema, soy de tipo QR");	
+	}else{
+		sprintf(buffer, "Acabo de entrar en el sistema, soy de tipo QR");
+	}
+	sprintf(quienHabla, "Solicitud %d", solicitudActual->id); 
+	writeLogMessage(quienHabla, buffer);
+	pthread_mutex_unlock(&escribirLog);
+
+
+	//imprimimos los datos que tiene la estructura asociada al hilo
 	printf("Soy una solicitud, y mi id es %d\n", (*solicitudActual).id);
 	if(solicitudActual->tipo == INVITACION){
 		printf("Soy de tipo Invitación\n");
@@ -360,56 +374,99 @@ void *accionesSolicitud(void *arg){ //Funcion que ejecutan los hilos al crearse
 
 	pthread_mutex_unlock(&datosSolicitud);
 
-	//TODO Guardar en el log
-
 	sleep(4);
 
 	//Ahora viene la parte en la que la solicitud comprueba cada 3 segundos si ha sido aceptada o rechazada
 
-	//pthread_mutex_lock(&datosSolicitud);
+	pthread_mutex_lock(&datosSolicitud);
 	while(solicitudActual->atendido == PORATENDER){
 		//Comprobamos el comportamiento de la solicitud
 		if (descartar(solicitudActual->tipo)== false){
 			sleep(3);
 		} else{
+
+			pthread_mutex_lock(&escribirLog);
+			sprintf(buffer, "He sido descartada");	
+			sprintf(quienHabla, "Solicitud %d", solicitudActual->id); 
+			writeLogMessage(quienHabla, buffer);
+			pthread_mutex_unlock(&escribirLog);
+
+
 			borrarEstructura(&solicitudActual); //TODO rehacer
 			pthread_exit(NULL);
 		}
 	}
-	//pthread_mutex_unlock(datosSolicitud);
+
+	pthread_mutex_lock(&escribirLog);
+	sprintf(buffer, "Estoy siendo atendida");	
+	sprintf(quienHabla, "Solicitud %d", solicitudActual->id); 
+	writeLogMessage(quienHabla, buffer);
+	pthread_mutex_unlock(&escribirLog);
+
+	pthread_mutex_unlock(&datosSolicitud);
 
 	
 	//TODO eespera activa? variable condicion? que pasa con la variable condicion cuando ha varios que estan haciendo esta espera a la vez?
+	//TODO es necesario que este dentro de un mutex
 	while(solicitudActual->atendido == ATENDIENDO){
 		sleep(1);	
 	}
 	
 
-	//Ya ha sido atendido
 
+	//Ya ha sido atendido
+	//TODO esto tiene que estar dentro del mutex datosSolicitud
+
+	pthread_mutex_lock(&escribirLog);
 	//aqui el atendedor ya ha seteado la clase de solicitud que somos
 	if(solicitudActual->tipoDatos==ATENCIONCORRECTA){
-		printf("Mis datos estan correctos\n");
+		printf("Mis datos son correctos\n");
+		sprintf(buffer, "Mis datos son correctos");
 	}else if(solicitudActual->tipoDatos==ERRORESDATOS){
-		printf("Mis datos estan con errores\n");
+		printf("Mis datos tienen errores\n");
+		sprintf(buffer, "Mis datos tienen errores");
 	}else if(solicitudActual->tipoDatos==ANTECEDENTES){
-		printf("TENGO ANTECEDENTES!!\n");
+		printf("¡¡TENGO ANTECEDENTES!!\n");
+		sprintf(buffer, "¡¡TENGO ANTECEDENTES!!");
 	}
+	sprintf(quienHabla, "Solicitud %d", solicitudActual->id); 
+	writeLogMessage(quienHabla, buffer);
+	pthread_mutex_unlock(&escribirLog);
 
-	//TODO esperar a ser atendido
-	if(solicitudActual->tipoDatos == ANTECEDENTES){ //Este tipo de solicitud no puede participar en actividades sociales, asique se va pa su casa
+	if(solicitudActual->tipoDatos == ANTECEDENTES){ //Este tipo de solicitud no puede participar en actividades sociales, asi que se va pa su casa
+
+		pthread_mutex_lock(&escribirLog);
+		sprintf(buffer, "Como no puedo participar en ninguna actividad social, me voy.");	
+		sprintf(quienHabla, "Solicitud %d", solicitudActual->id); 
+		writeLogMessage(quienHabla, buffer);
+		pthread_mutex_unlock(&escribirLog);
+
 		//Inicializamos todos los parametros de la estructura del hilo a cero
 		borrarEstructura(&solicitudActual);
 		//Eliminamos el hilo con el exit
 		pthread_exit(NULL);
 
 	}else if(calculaAleatorio(0, 1) == 0){ //NO QUIERE PARTICIPAR
+
+		pthread_mutex_lock(&escribirLog);
+		sprintf(buffer, "No quiero participar en ninguna actividad social, así que me voy.");	
+		sprintf(quienHabla, "Solicitud %d", solicitudActual->id); 
+		writeLogMessage(quienHabla, buffer);
+		pthread_mutex_unlock(&escribirLog);
+
 		//Inicializamos todos los parametros de la estructura del hilo a cero
 		borrarEstructura(&solicitudActual);
 		//Eliminamos el hilo con el exit
 		pthread_exit(NULL);
 
 	}else{
+
+		pthread_mutex_lock(&escribirLog);
+		sprintf(buffer, "EStoy lista para participar en la actividad social.");	
+		sprintf(quienHabla, "Solicitud %d", solicitudActual->id); 
+		writeLogMessage(quienHabla, buffer);
+		pthread_mutex_unlock(&escribirLog);
+
 		//TODO Hay que comprobar si fin==false para que no puedan entrar solicitudes a la cola de la actividad cuando ya se ha acabado el programa
 		pthread_mutex_lock(&actividadSocial);
 
@@ -447,13 +504,13 @@ void *accionesSolicitud(void *arg){ //Funcion que ejecutan los hilos al crearse
 		//Esto es la actividad basicamente, dormir
 		
 
-		if(contador == 1){ //TODO buscar una opcion mejor de que en total se espere 3 segundos
+		if(contadorActividad == 1){ //TODO buscar una opcion mejor de que en total se espere 3 segundos
 			sleep(3); 
 		}
 
 		//TODO borrar de la cola
 		
-		contador--;
+		contadorActividad--;
 
 		if(contadorActividad == 0){
 			pthread_cond_signal(&avisarCoordinador); //Avisa de que ya han salido todos de la actividad
@@ -544,6 +601,8 @@ void *accionesCoordinadorSocial(void *arg){
 	*
 	**/
 
+	char buffer[50], quienHabla[50];
+
 	while(fin==false){
 		pthread_mutex_lock(&actividadSocial);
 
@@ -552,16 +611,19 @@ void *accionesCoordinadorSocial(void *arg){
 
 		pthread_cond_signal(&empezadActividad);
 
-
 		pthread_mutex_lock(&escribirLog);
-		//TODO log comienza actividad
+		sprintf(buffer, "La actividad puede comenzar");	
+		sprintf(quienHabla, "Coordinador"); 
+		writeLogMessage(quienHabla, buffer);
 		pthread_mutex_unlock(&escribirLog);
 
 
 		pthread_cond_wait(&avisarCoordinador, &actividadSocial);
 
 		pthread_mutex_lock(&escribirLog);
-		//TODO log acaba actividad
+		sprintf(buffer, "La actividad ha finalizado");	
+		sprintf(quienHabla, "Coordinador"); 
+		writeLogMessage(quienHabla, buffer);
 		pthread_mutex_unlock(&escribirLog);
 
 
@@ -632,14 +694,17 @@ int calculaAleatorio(int min, int max){
 *
 **/
 void acabarPrograma(int sig){
+	char buffer[50], quienHabla[50];
 
 	//TODO 
 
 	if(fin){
-		printf("Ya se esta trabajando en cerrar el programa");
+		printf("Ya se esta trabajando en finalizar el programa");
 		pthread_mutex_lock(&escribirLog);
-		//log de que ya estamos trabajando en cerrar el programa
-		pthrea_mutex_unlock(&escribirLog);
+		sprintf(buffer, "Ya se esta trabajando en finalizar el programa");
+		sprintf(quienHabla, "Sistema"); 
+		writeLogMessage(quienHabla, buffer);
+		pthread_mutex_unlock(&escribirLog);
 	}else{
 		fin=true;
 	}
