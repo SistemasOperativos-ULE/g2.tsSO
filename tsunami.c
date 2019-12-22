@@ -857,10 +857,10 @@ int buscarSiguiente(int tipo){
 	bool busquedaTerminada = false;
 	int i = 0;
 	int siguiente = posicionSiguiente(SOLICITUD);
-	if(siguiente != 0){
+	if(siguiente != -1){
 		switch(tipo){
 			case PRO:
-				while(!busquedaTerminada){
+				while(!busquedaTerminada && i<tamCola){
 					if(cola[i].atendido == PORATENDER){
 						encontrado = i;
 						busquedaTerminada = true;
@@ -870,7 +870,7 @@ int buscarSiguiente(int tipo){
 				}
 				break;
 			default:
-				while(!busquedaTerminada){
+				while(!busquedaTerminada && i<tamCola){
 					if(cola[i].atendido == PORATENDER && cola[i].tipo == tipo){
 						encontrado = i;
 						busquedaTerminada = true;
