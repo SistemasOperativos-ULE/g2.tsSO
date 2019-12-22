@@ -350,26 +350,24 @@ void *accionesSolicitud(void *arg){ //Funcion que ejecutan los hilos al crearse
 	solicitudActual = (struct solicitud *) arg;
 	int siguienteActSoc;
 	char buffer[100], quienHabla[50];
-
-
-	pthread_mutex_lock(&datosSolicitud);
+	int idActual = solicitudActual->id;
+	int tipoActual = solicitudActual->tipo;
 
 	pthread_mutex_lock(&escribirLog);
-	if(solicitudActual->tipo == QR){
+	if(tipoActual == QR){
 		sprintf(buffer, "Acabo de entrar en el sistema, soy de tipo QR");	
 	}else{
 		sprintf(buffer, "Acabo de entrar en el sistema, soy de tipo Invitación");
 	}
-	sprintf(quienHabla, "Solicitud %d", solicitudActual->id); 
+	sprintf(quienHabla, "Solicitud %d", idActual); 
 	writeLogMessage(quienHabla, buffer);
 	pthread_mutex_unlock(&escribirLog);
-	pthread_mutex_unlock(&datosSolicitud);
 
 	//imprimimos los datos que tiene la estructura asociada al hilo
 	//Esta parte del codigo es solo para comprobar el funcionamiento
 	pthread_mutex_lock(&datosSolicitud);
-	printf("Soy una solicitud, y mi id es %d\n", (*solicitudActual).id);
-	if(solicitudActual->tipo == INVITACION){
+	printf("Soy una solicitud, y mi id es %d\n", idActual);
+	if(tipoActual == INVITACION){
 		printf("Soy de tipo Invitación\n");
 	}else{
 		printf("Soy de tipo QR\n");
@@ -383,27 +381,26 @@ void *accionesSolicitud(void *arg){ //Funcion que ejecutan los hilos al crearse
 	//TODO revisar el mutex de datosSolicitud
 	pthread_mutex_lock(&datosSolicitud);
 	while(solicitudActual->atendido == PORATENDER){
-		if (descartar(solicitudActual->tipo)== false){
+		if (descartar(tipoActual)== false){
 			pthread_mutex_unlock(&datosSolicitud);
 			sleep(3);
 			pthread_mutex_lock(&datosSolicitud);
 		} else{
+			pthread_mutex_unlock(&datosSolicitud);
 			pthread_mutex_lock(&escribirLog);
 			sprintf(buffer, "He sido descartada");	
-			sprintf(quienHabla, "Solicitud %d", solicitudActual->id); 
+			sprintf(quienHabla, "Solicitud %d", idActual); 
 			writeLogMessage(quienHabla, buffer);
 			pthread_mutex_unlock(&escribirLog);
-			borrarDeLaCola(solicitudActual->id);
-			pthread_mutex_unlock(&datosSolicitud);
+			borrarDeLaCola(idActual);
 			pthread_exit(NULL);
 		}
 	}
-	
+	pthread_mutex_unlock(&datosSolicitud);
 	pthread_mutex_lock(&escribirLog);
 	sprintf(buffer, "Estoy siendo atendida");	
-	sprintf(quienHabla, "Solicitud %d", solicitudActual->id); 
+	sprintf(quienHabla, "Solicitud %d", idActual); 
 	writeLogMessage(quienHabla, buffer);
-	pthread_mutex_unlock(&datosSolicitud);
 	pthread_mutex_unlock(&escribirLog);
 
 	
@@ -420,7 +417,6 @@ void *accionesSolicitud(void *arg){ //Funcion que ejecutan los hilos al crearse
 
 
 	//Ya ha sido atendido
-	//TODO esto tiene que estar dentro del mutex datosSolicitud
 	pthread_mutex_lock(&datosSolicitud);
 	pthread_mutex_lock(&escribirLog);
 	//aqui el atendedor ya ha seteado la clase de solicitud que somos
@@ -434,45 +430,43 @@ void *accionesSolicitud(void *arg){ //Funcion que ejecutan los hilos al crearse
 		printf("¡¡TENGO ANTECEDENTES!!\n");
 		sprintf(buffer, "¡¡TENGO ANTECEDENTES!!");
 	}
-	sprintf(quienHabla, "Solicitud %d", solicitudActual->id);
-	pthread_mutex_unlock(&datosSolicitud); 
+	pthread_mutex_unlock(&datosSolicitud);
+	sprintf(quienHabla, "Solicitud %d", idActual); 
 	writeLogMessage(quienHabla, buffer);
 	pthread_mutex_unlock(&escribirLog);
 
 	pthread_mutex_lock(&datosSolicitud);
 	if(solicitudActual->tipoDatos == ANTECEDENTES){ //Este tipo de solicitud no puede participar en actividades sociales, asi que se va pa su casa
-
+		pthread_mutex_unlock(&datosSolicitud);
 		pthread_mutex_lock(&escribirLog);
 		sprintf(buffer, "Como no puedo participar en ninguna actividad social, me voy.");	
-		sprintf(quienHabla, "Solicitud %d", solicitudActual->id); 
+		sprintf(quienHabla, "Solicitud %d", idActual); 
 		writeLogMessage(quienHabla, buffer);
 		pthread_mutex_unlock(&escribirLog);
 
 		//Inicializamos todos los parametros de la estructura del hilo a cero
-		borrarDeLaCola(solicitudActual->id);
-		pthread_mutex_unlock(&datosSolicitud);
+		borrarDeLaCola(idActual);
 		//Eliminamos el hilo con el exit
 		pthread_exit(NULL);
 
 	}else if(calculaAleatorio(0, 1) == 0){ //NO QUIERE PARTICIPAR
+		pthread_mutex_unlock(&datosSolicitud);
 		pthread_mutex_lock(&escribirLog);
 		sprintf(buffer, "No quiero participar en ninguna actividad social, así que me voy.");	
-		sprintf(quienHabla, "Solicitud %d", solicitudActual->id);
+		sprintf(quienHabla, "Solicitud %d",idActual);
 		writeLogMessage(quienHabla, buffer);
 		pthread_mutex_unlock(&escribirLog);
 
 		//Inicializamos todos los parametros de la estructura del hilo a cero
-		borrarDeLaCola(solicitudActual->id);
-		pthread_mutex_unlock(&datosSolicitud);
+		borrarDeLaCola(idActual);
 		//Eliminamos el hilo con el exit
 		pthread_exit(NULL);
 
 	}else{
-
+		pthread_mutex_unlock(&datosSolicitud);
 		pthread_mutex_lock(&escribirLog);
 		sprintf(buffer, "EStoy lista para participar en la actividad social.");	
-		sprintf(quienHabla, "Solicitud %d", solicitudActual->id);
-		pthread_mutex_unlock(&datosSolicitud);
+		sprintf(quienHabla, "Solicitud %d", idActual);
 		writeLogMessage(quienHabla, buffer);
 		pthread_mutex_unlock(&escribirLog);
 
@@ -496,13 +490,7 @@ void *accionesSolicitud(void *arg){ //Funcion que ejecutan los hilos al crearse
 		}
 		
 		//pthread_mutex_unlock(&actividadSocial);
-
-
-		pthread_mutex_lock(&datosSolicitud);
-
 		borrarDeLaCola(solicitudActual->id);
-
-		pthread_mutex_unlock(&datosSolicitud);
 
 		//TODO escribir en el log que estoy preparado para la actividad
 
@@ -747,9 +735,10 @@ void acabarPrograma(int sig){
 
 
 void borrarDeLaCola(int id){
+	//TODO revisar el mutex de datosSolicitud
 	bool encontrado = false;
 	int i = 0;
-
+	pthread_mutex_lock(&datosSolicitud);
 	while(i < tamCola && !encontrado){
 		if(cola[i].id == id){
 			cola[i].id = -1;
@@ -760,6 +749,7 @@ void borrarDeLaCola(int id){
 	}
 
 	compactar(i);
+	pthread_mutex_unlock(&datosSolicitud);
 }
 
 void compactar(int posicionVacia){
