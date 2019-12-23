@@ -106,6 +106,7 @@ int generadorID(int tipo);
 bool descartar(int val);
 int buscarSiguiente(int tipo);
 void borrarDeLaCola(int id);
+void borrarColaActividad(int id);
 
 
 
@@ -134,7 +135,7 @@ int main(int argc, char *argv[]){
 
 	struct sigaction sLlegaSolicitud, sFinalizar;
 	pthread_t coordinador;
-
+	char buffer[100], quienHabla[50];
 	sLlegaSolicitud.sa_handler = nuevaSolicitud;
 
 	if(sigaction(SIGUSR1, &sLlegaSolicitud, NULL) == -1){
@@ -192,6 +193,11 @@ int main(int argc, char *argv[]){
 		exit(-1);
 	}
 
+	pthread_mutex_lock(&escribirLog);
+	sprintf(buffer, "Empieza\n\n");	
+	sprintf(quienHabla,"DIOS"); 
+	writeLogMessage(quienHabla, buffer);
+	pthread_mutex_unlock(&escribirLog);
 
 	idSolicitud = 1;
 	fin = false;
@@ -290,6 +296,7 @@ void nuevaSolicitud(int sig){
 	int siguiente= posicionSiguiente(SOLICITUD);
 	if(siguiente==-1){
 		printf("No se puede anyadir otra solicitud\n");
+		pthread_mutex_unlock(&datosSolicitud);
 	}else{
 		(*(cola+siguiente)).id = generadorID(SOLICITUD);
 		(*(cola+siguiente)).atendido = PORATENDER;
@@ -386,13 +393,13 @@ void *accionesSolicitud(void *arg){ //Funcion que ejecutan los hilos al crearse
 			sleep(3);
 			pthread_mutex_lock(&datosSolicitud);
 		} else{
-			pthread_mutex_unlock(&datosSolicitud);
 			pthread_mutex_lock(&escribirLog);
 			sprintf(buffer, "He sido descartada");	
 			sprintf(quienHabla, "Solicitud %d", idActual); 
 			writeLogMessage(quienHabla, buffer);
 			pthread_mutex_unlock(&escribirLog);
 			borrarDeLaCola(idActual);
+			pthread_mutex_unlock(&datosSolicitud);
 			pthread_exit(NULL);
 		}
 	}
@@ -437,7 +444,6 @@ void *accionesSolicitud(void *arg){ //Funcion que ejecutan los hilos al crearse
 
 	pthread_mutex_lock(&datosSolicitud);
 	if(solicitudActual->tipoDatos == ANTECEDENTES){ //Este tipo de solicitud no puede participar en actividades sociales, asi que se va pa su casa
-		pthread_mutex_unlock(&datosSolicitud);
 		pthread_mutex_lock(&escribirLog);
 		sprintf(buffer, "Como no puedo participar en ninguna actividad social, me voy.");	
 		sprintf(quienHabla, "Solicitud %d", idActual); 
@@ -446,11 +452,11 @@ void *accionesSolicitud(void *arg){ //Funcion que ejecutan los hilos al crearse
 
 		//Inicializamos todos los parametros de la estructura del hilo a cero
 		borrarDeLaCola(idActual);
+		pthread_mutex_unlock(&datosSolicitud);
 		//Eliminamos el hilo con el exit
 		pthread_exit(NULL);
 
 	}else if(calculaAleatorio(0, 1) == 0){ //NO QUIERE PARTICIPAR
-		pthread_mutex_unlock(&datosSolicitud);
 		pthread_mutex_lock(&escribirLog);
 		sprintf(buffer, "No quiero participar en ninguna actividad social, así que me voy.");	
 		sprintf(quienHabla, "Solicitud %d",idActual);
@@ -459,6 +465,7 @@ void *accionesSolicitud(void *arg){ //Funcion que ejecutan los hilos al crearse
 
 		//Inicializamos todos los parametros de la estructura del hilo a cero
 		borrarDeLaCola(idActual);
+		pthread_mutex_unlock(&datosSolicitud);
 		//Eliminamos el hilo con el exit
 		pthread_exit(NULL);
 
@@ -480,17 +487,19 @@ void *accionesSolicitud(void *arg){ //Funcion que ejecutan los hilos al crearse
 
 
 		//Aqui ya puede entrar a la actividad social
-
+		pthread_mutex_lock(&datosSolicitud);
 		colaActividadSocial[contadorActividad] = *solicitudActual; //TODO comprobar que se copia el contenido
 
 		contadorActividad++;
+
+		borrarDeLaCola(idActual);
+		pthread_mutex_unlock(&datosSolicitud);
 
 		if(contadorActividad == TAMACTIVIDAD){
 			pthread_cond_signal(&avisarCoordinador);
 		}
 		
 		//pthread_mutex_unlock(&actividadSocial);
-		borrarDeLaCola(solicitudActual->id);
 
 		//TODO escribir en el log que estoy preparado para la actividad
 
@@ -506,10 +515,11 @@ void *accionesSolicitud(void *arg){ //Funcion que ejecutan los hilos al crearse
 		}
 
 		//TODO borrar de la cola
-		
+		borrarColaActividad(idActual);
 		contadorActividad--;
 
 		if(contadorActividad == 0){
+			printf("SEEEEEEEE ACABOOOOO\n");
 			pthread_cond_signal(&avisarCoordinador); //Avisa de que ya han salido todos de la actividad
 		}
 
@@ -518,10 +528,6 @@ void *accionesSolicitud(void *arg){ //Funcion que ejecutan los hilos al crearse
 		pthread_mutex_unlock(&escribirLog);
 
 		pthread_mutex_unlock(&actividadSocial);
-
-
-
-
 
 
 	}
@@ -545,7 +551,7 @@ void *accionesAtendedor(void *arg){
 	int solicitudAatender;
 	int aleatorio;
 	int tiempoAtencion;
-
+	char buffer[100], quienHabla[50];
 	while(true){
 
 		do{
@@ -575,11 +581,23 @@ void *accionesAtendedor(void *arg){
 
 		sleep(tiempoAtencion);
 
+		atendedorActual->numSolicitudes++;
+
 		//TODO TENER EN CUENTA LOS DOS CAMBIOS DE FLAG DE ATENDIDO QUE PONE EL DISENIO
 
-		if(atendedorActual->numSolicitudes % 5 == 0){
+		if((atendedorActual->numSolicitudes % 5 == 0) && (atendedorActual->numSolicitudes!=0)){
 			//le toca tomar el cafe
+			pthread_mutex_lock(&escribirLog);
+			sprintf(buffer, "Voy a tomar un cafe llevo %d",atendedorActual->numSolicitudes);	
+			sprintf(quienHabla, "Atendedor %d",atendedorActual->id); 
+			writeLogMessage(quienHabla, buffer);
+			pthread_mutex_unlock(&escribirLog);
 			sleep(10);
+			pthread_mutex_lock(&escribirLog);
+			sprintf(buffer, "Acabe de tomar un cafe");	
+			sprintf(quienHabla, "Atendedor %d",atendedorActual->id); 
+			writeLogMessage(quienHabla, buffer);
+			pthread_mutex_unlock(&escribirLog);
 		}
 	}
 }
@@ -609,7 +627,7 @@ void *accionesCoordinadorSocial(void *arg){
 		pthread_cond_wait(&avisarCoordinador, &actividadSocial);
 		candadoEntrarActividad = false;
 
-		pthread_cond_signal(&empezadActividad);
+		pthread_cond_broadcast(&empezadActividad);
 
 		pthread_mutex_lock(&escribirLog);
 		sprintf(buffer, "La actividad puede comenzar");	
@@ -733,12 +751,24 @@ void acabarPrograma(int sig){
 	
 }*/
 
+void borrarColaActividad(int id){
+	bool encontrado = false;
+	int i = 0;
+	while(i < TAMACTIVIDAD && !encontrado){
+		if(colaActividadSocial[i].id == id){
+			colaActividadSocial[i].id = -1;
+			encontrado = true;
+		}else{
+			i++;
+		}
+	}
+}
+
 
 void borrarDeLaCola(int id){
 	//TODO revisar el mutex de datosSolicitud
 	bool encontrado = false;
 	int i = 0;
-	pthread_mutex_lock(&datosSolicitud);
 	while(i < tamCola && !encontrado){
 		if(cola[i].id == id){
 			cola[i].id = -1;
@@ -747,9 +777,7 @@ void borrarDeLaCola(int id){
 			i++;
 		}
 	}
-
 	compactar(i);
-	pthread_mutex_unlock(&datosSolicitud);
 }
 
 void compactar(int posicionVacia){
@@ -861,7 +889,7 @@ int buscarSiguiente(int tipo){
 		switch(tipo){
 			case PRO:
 				while(!busquedaTerminada && i<tamCola){
-					if(cola[i].atendido == PORATENDER){
+					if(cola[i].atendido == PORATENDER && cola[i].id != -1){
 						encontrado = i;
 						busquedaTerminada = true;
 					}else{
@@ -871,7 +899,7 @@ int buscarSiguiente(int tipo){
 				break;
 			default:
 				while(!busquedaTerminada && i<tamCola){
-					if(cola[i].atendido == PORATENDER && cola[i].tipo == tipo){
+					if(cola[i].atendido == PORATENDER && cola[i].tipo == tipo && cola[i].id != -1){
 						encontrado = i;
 						busquedaTerminada = true;
 					}else{
