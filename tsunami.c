@@ -56,7 +56,7 @@ int idSolicitud;
 //Inicialmente se pone al tamanio por defecto, puede que haya que cambiarlo en la parte extra de la practica (modificacion dinamica)
 int tamCola;
 
-pthread_mutex_t datosSolicitud, actividadSocial, escribirLog;
+pthread_mutex_t datosSolicitud, actividadSocial, escribirLog, comprobarFin;
 
 pthread_cond_t empezadActividad, avisarCoordinador, candado;
 
@@ -83,7 +83,7 @@ bool candadoEntrarActividad;
 
 FILE *registroTiempos;
 
-bool fin;
+bool fin; //protegida??
 
 /**
 * DECLARACIONES DE FUNCIONES
@@ -97,7 +97,7 @@ void *accionesAtendedor(void *arg);
 void *accionesCoordinadorSocial(void *arg);
 void writeLogMessage(char *id, char *msg);
 int calculaAleatorio(int min, int max);
-void acabarPrograma(int sig);
+void ignoraSenyales(int sig);
 void compactar();
 void imprimeEstado();
 int posicionSiguiente(int tipoCola);
@@ -107,6 +107,8 @@ bool descartar(int val);
 int buscarSiguiente(int tipo);
 void borrarDeLaCola(int id);
 void borrarColaActividad(int id);
+void acabarPrograma(int sig);
+bool estanTodosAtendidos();
 
 
 
@@ -133,7 +135,7 @@ int main(int argc, char *argv[]){
 
 	//Esperar seniales de forma infinita
 
-	struct sigaction sLlegaSolicitud, sFinalizar;
+	struct sigaction sLlegaSolicitud, sPrepararFin, sFinalizar;
 	pthread_t coordinador;
 	char buffer[100], quienHabla[50];
 	sLlegaSolicitud.sa_handler = nuevaSolicitud;
@@ -149,9 +151,16 @@ int main(int argc, char *argv[]){
 	}
 
 
-	sFinalizar.sa_handler = acabarPrograma;
+	sPrepararFin.sa_handler = ignoraSenyales;
 	
-	if(sigaction(SIGINT, &sFinalizar, NULL) == -1){
+	if(sigaction(SIGINT, &sPrepararFin, NULL) == -1){
+		perror("Error al comunicar la finalizacion del programa");
+		exit(-1);
+	}
+
+	sFinalizar.sa_handler = acabarPrograma;
+
+	if(sigaction(SIGTRAP, &sFinalizar, NULL) == -1){
 		perror("Error al comunicar la finalizacion del programa");
 		exit(-1);
 	}
@@ -178,6 +187,11 @@ int main(int argc, char *argv[]){
 		exit(-1);
 	}
 
+	if(pthread_mutex_init(&comprobarFin, NULL) != 0) {
+	//Error en la inicializacion del mutex
+	exit(-1);
+	}
+
 	if(pthread_cond_init(&avisarCoordinador,NULL) != 0){
 		//Error en la inicializacion del mutex
 		exit(-1);
@@ -194,10 +208,12 @@ int main(int argc, char *argv[]){
 	}
 
 	pthread_mutex_lock(&escribirLog);
-	sprintf(buffer, "Empieza\n\n");	
-	sprintf(quienHabla,"DIOS"); 
+	sprintf(buffer, "Empieza");	
+	sprintf(quienHabla,"\n\nSistema"); 
 	writeLogMessage(quienHabla, buffer);
 	pthread_mutex_unlock(&escribirLog);
+
+	srand(time(NULL));
 
 	idSolicitud = 1;
 	fin = false;
@@ -229,15 +245,20 @@ int main(int argc, char *argv[]){
 
 	pthread_create(&coordinador, NULL, accionesCoordinadorSocial, NULL);
 
-	while(fin==false){ //TODO ES ESTA LA MEJOR OPCION?
-		pause();
+	while(fin==false){ //TODO ES ESTA LA MEJOR OPCION? puede ser que intente comprobar si se ha llegado al final antes de que fin=true en la manejadora
+		pause(); //TODO hay que comprobar el fin de programa dentro de un mutex
 	}
 
 
 	//TODO LIBERAR TODOS LOS PUNTEROS, DESTRUIR MUTEX, ETC
 	free(cola);
 	free(atendedores);
-	printf("Todo esta cumplido, podemos cerrar\n");
+
+	pthread_mutex_lock(&escribirLog);
+	sprintf(buffer, "Se ha acabado el programa"); //TODO comprobar que esto se escribe lo ultimo
+	sprintf(quienHabla,"Sistema"); 
+	writeLogMessage(quienHabla, buffer);
+	pthread_mutex_unlock(&escribirLog);
 
 	return 0;
 }
@@ -251,7 +272,7 @@ void nuevoAtendedor(int tipo){
 	int siguiente;
 	siguiente = posicionSiguiente(ATENDEDOR);
 	if(siguiente == -1){
-		printf("No se puede anyiadir otro atendedor\n");
+		printf("No se puede anyadir otro atendedor\n");
 	}else{
 		(*(atendedores+siguiente)).id = generadorID(ATENDEDOR);
 		(*(atendedores+siguiente)).tipo = tipo;
@@ -261,10 +282,11 @@ void nuevoAtendedor(int tipo){
 }
 
 int generadorID(int tipo){
-	if(tipo == ATENDEDOR)
+	if(tipo == ATENDEDOR){
 		return idAtendedor++;
-	else
+	}else{
 		return idSolicitud++;
+	}
 }
 
 
@@ -291,27 +313,47 @@ void nuevaSolicitud(int sig){
 	**/	
 
 	//TODO if(fin==true) no cogemos mas senyales
-	pthread_mutex_lock(&datosSolicitud);
+	int siguiente;
+	bool ignorarSenyales = false;
+	char buffer[100], quienHabla[50];
 
-	int siguiente= posicionSiguiente(SOLICITUD);
-	if(siguiente==-1){
-		printf("No se puede anyadir otra solicitud\n");
-		pthread_mutex_unlock(&datosSolicitud);
-	}else{
-		(*(cola+siguiente)).id = generadorID(SOLICITUD);
-		(*(cola+siguiente)).atendido = PORATENDER;
+	pthread_mutex_lock(&comprobarFin);
+	ignorarSenyales = fin;
+	pthread_mutex_unlock(&comprobarFin);
 
-		if(sig == SIGUSR1){ //SIGUSR1 -- invitación
-			(*(cola+siguiente)).tipo = INVITACION;
+	if(!ignorarSenyales){
+		pthread_mutex_lock(&datosSolicitud);
+		siguiente= posicionSiguiente(SOLICITUD);
+		if(siguiente==-1){
+			printf("No se puede anyadir otra solicitud\n");
+			pthread_mutex_lock(&escribirLog);
+			sprintf(buffer, "La solicitud no ha podido entrar porque la cola estaba llena");	
+			sprintf(quienHabla,"Sistema"); 
+			writeLogMessage(quienHabla, buffer);
+			pthread_mutex_unlock(&escribirLog);
 			pthread_mutex_unlock(&datosSolicitud);
-			pthread_create(&(*(cola+siguiente)).tid, NULL, accionesSolicitud, &*(cola+siguiente));
+		}else{
+			(*(cola+siguiente)).id = generadorID(SOLICITUD);
+			(*(cola+siguiente)).atendido = PORATENDER;
 
-		}else if(sig == SIGUSR2){ //SIGUSR2 -- QR
-			(*(cola+siguiente)).tipo = QR;
-			pthread_mutex_unlock(&datosSolicitud);
-			pthread_create(&(*(cola+siguiente)).tid, NULL, accionesSolicitud, &*(cola+siguiente));
+			if(sig == SIGUSR1){ //SIGUSR1 -- invitación
+				(*(cola+siguiente)).tipo = INVITACION;
+				pthread_mutex_unlock(&datosSolicitud);
+				pthread_create(&(*(cola+siguiente)).tid, NULL, accionesSolicitud, &*(cola+siguiente));
 
+			}else if(sig == SIGUSR2){ //SIGUSR2 -- QR
+				(*(cola+siguiente)).tipo = QR;
+				pthread_mutex_unlock(&datosSolicitud);
+				pthread_create(&(*(cola+siguiente)).tid, NULL, accionesSolicitud, &*(cola+siguiente));
+
+			}
 		}
+	}else{
+		pthread_mutex_lock(&escribirLog);
+		sprintf(buffer, "No pueden entrar mas solicitudes porque el programa esta en proceso de finalizacion");	
+		sprintf(quienHabla,"Sistema"); 
+		writeLogMessage(quienHabla, buffer);
+		pthread_mutex_unlock(&escribirLog);
 	}
 }
 
@@ -357,10 +399,17 @@ void *accionesSolicitud(void *arg){ //Funcion que ejecutan los hilos al crearse
 	solicitudActual = (struct solicitud *) arg;
 	int siguienteActSoc;
 	char buffer[100], quienHabla[50];
-	int idActual = solicitudActual->id;
-	int tipoActual = solicitudActual->tipo;
+	int idActual;
+	int tipoActual;
+
+	//TODO comprobar si hay que tener un mutex aqui
+	pthread_mutex_lock(&datosSolicitud);
+	idActual = solicitudActual->id;
+	tipoActual = solicitudActual->tipo;
+	pthread_mutex_unlock(&datosSolicitud);	
 
 	pthread_mutex_lock(&escribirLog);
+
 	if(tipoActual == QR){
 		sprintf(buffer, "Acabo de entrar en el sistema, soy de tipo QR");	
 	}else{
@@ -372,15 +421,17 @@ void *accionesSolicitud(void *arg){ //Funcion que ejecutan los hilos al crearse
 
 	//imprimimos los datos que tiene la estructura asociada al hilo
 	//Esta parte del codigo es solo para comprobar el funcionamiento
-	pthread_mutex_lock(&datosSolicitud);
+
+	//TODO comprobar si se puede borrar este mutex
+	//pthread_mutex_lock(&datosSolicitud);
 	printf("Soy una solicitud, y mi id es %d\n", idActual);
 	if(tipoActual == INVITACION){
 		printf("Soy de tipo Invitación\n");
 	}else{
 		printf("Soy de tipo QR\n");
 	}
-	printf("Atendido = %d", solicitudActual->atendido);
-	pthread_mutex_unlock(&datosSolicitud);
+	//printf("Atendido = %d", solicitudActual->atendido);
+	//pthread_mutex_unlock(&datosSolicitud);
 
 	sleep(4);
 
@@ -436,6 +487,8 @@ void *accionesSolicitud(void *arg){ //Funcion que ejecutan los hilos al crearse
 	}else if(solicitudActual->tipoDatos==ANTECEDENTES){
 		printf("¡¡TENGO ANTECEDENTES!!\n");
 		sprintf(buffer, "¡¡TENGO ANTECEDENTES!!");
+	}else{
+		printf("ESTO ESTA MAL %d\n", solicitudActual->tipoDatos);
 	}
 	pthread_mutex_unlock(&datosSolicitud);
 	sprintf(quienHabla, "Solicitud %d", idActual); 
@@ -472,7 +525,7 @@ void *accionesSolicitud(void *arg){ //Funcion que ejecutan los hilos al crearse
 	}else{
 		pthread_mutex_unlock(&datosSolicitud);
 		pthread_mutex_lock(&escribirLog);
-		sprintf(buffer, "EStoy lista para participar en la actividad social.");	
+		sprintf(buffer, "Estoy lista para participar en la actividad social.");	
 		sprintf(quienHabla, "Solicitud %d", idActual);
 		writeLogMessage(quienHabla, buffer);
 		pthread_mutex_unlock(&escribirLog);
@@ -534,7 +587,7 @@ void *accionesSolicitud(void *arg){ //Funcion que ejecutan los hilos al crearse
 
 	//-->NO , SE EXPULSA
 	//-->SI , ESPERA A QUE LA COLA DE ACTV SE VACIE Y ENTRA, PARA ESPERAR A SER MATADO (VARIABLE CONDICION
-	//TO DO//wait(coordinador.me.mata.o.coordinador.me.mata)	
+	//TODO//wait(coordinador.me.mata.o.coordinador.me.mata)	
 	pthread_exit(NULL);
 }
 
@@ -552,54 +605,61 @@ void *accionesAtendedor(void *arg){
 	int aleatorio;
 	int tiempoAtencion;
 	char buffer[100], quienHabla[50];
-	while(true){
 
-		do{
-			pthread_mutex_lock(&datosSolicitud);
-			solicitudAatender = buscarSiguiente(atendedorActual->tipo);
-			if(solicitudAatender == -1){
-				pthread_mutex_unlock(&datosSolicitud);
-				sleep(1);
+	while(!estanTodosAtendidos()){
+
+			do{
+				pthread_mutex_lock(&datosSolicitud);
+				solicitudAatender = buscarSiguiente(atendedorActual->tipo);
+				if(solicitudAatender == -1){
+					pthread_mutex_unlock(&datosSolicitud);
+					sleep(1);
+				}
+			}while(solicitudAatender == -1);
+
+			aleatorio = calculaAleatorio(1,10);
+
+			if(aleatorio <= 7){
+				(cola[solicitudAatender]).tipoDatos = ATENCIONCORRECTA;
+				tiempoAtencion = calculaAleatorio(1,4);
+				printf("A la solicitud %d le estoy metiendo el tipo %d\n", cola[solicitudAatender].id, cola[solicitudAatender].tipoDatos);
+			}else if(aleatorio <= 9){
+				(cola[solicitudAatender]).tipoDatos = ERRORESDATOS;
+				tiempoAtencion = calculaAleatorio(2,6);
+				printf("A la solicitud %d le estoy metiendo el tipo %d\n", cola[solicitudAatender].id, cola[solicitudAatender].tipoDatos);
+			}else{
+				(cola[solicitudAatender]).tipoDatos = ANTECEDENTES;
+				tiempoAtencion = calculaAleatorio(6,10);
+				printf("A la solicitud %d le estoy metiendo el tipo %d\n", cola[solicitudAatender].id, cola[solicitudAatender].tipoDatos);
 			}
-		}while(solicitudAatender == -1);
 
-		aleatorio = calculaAleatorio(1,10);
+			cola[solicitudAatender].atendido = ATENDIDO;
+			pthread_mutex_unlock(&datosSolicitud);
 
-		if(aleatorio <= 7){
-			cola[solicitudAatender].tipoDatos = ATENCIONCORRECTA;
-			tiempoAtencion = calculaAleatorio(1,4);
-		}else if(aleatorio <= 9){
-			cola[solicitudAatender].tipoDatos = ERRORESDATOS;
-			tiempoAtencion = calculaAleatorio(2,6);
-		}else{
-			cola[solicitudAatender].tipoDatos = ANTECEDENTES;
-			tiempoAtencion = calculaAleatorio(6,10);
-		}
+			sleep(tiempoAtencion);
 
-		cola[solicitudAatender].atendido = ATENDIDO;
-		pthread_mutex_unlock(&datosSolicitud);
+			//TODO hace falta mutex aqui? Los atendedores no se eliminan de la cola
+			atendedorActual->numSolicitudes++;
 
-		sleep(tiempoAtencion);
+			//TODO TENER EN CUENTA LOS DOS CAMBIOS DE FLAG DE ATENDIDO QUE PONE EL DISENIO
 
-		atendedorActual->numSolicitudes++;
-
-		//TODO TENER EN CUENTA LOS DOS CAMBIOS DE FLAG DE ATENDIDO QUE PONE EL DISENIO
-
-		if((atendedorActual->numSolicitudes % 5 == 0) && (atendedorActual->numSolicitudes!=0)){
-			//le toca tomar el cafe
-			pthread_mutex_lock(&escribirLog);
-			sprintf(buffer, "Voy a tomar un cafe llevo %d",atendedorActual->numSolicitudes);	
-			sprintf(quienHabla, "Atendedor %d",atendedorActual->id); 
-			writeLogMessage(quienHabla, buffer);
-			pthread_mutex_unlock(&escribirLog);
-			sleep(10);
-			pthread_mutex_lock(&escribirLog);
-			sprintf(buffer, "Acabe de tomar un cafe");	
-			sprintf(quienHabla, "Atendedor %d",atendedorActual->id); 
-			writeLogMessage(quienHabla, buffer);
-			pthread_mutex_unlock(&escribirLog);
-		}
+			if((atendedorActual->numSolicitudes % 5 == 0) && (atendedorActual->numSolicitudes!=0)){
+				//le toca tomar el cafe
+				pthread_mutex_lock(&escribirLog);
+				sprintf(buffer, "Voy a tomar un cafe llevo %d",atendedorActual->numSolicitudes);	
+				sprintf(quienHabla, "Atendedor %d",atendedorActual->id); 
+				writeLogMessage(quienHabla, buffer);
+				pthread_mutex_unlock(&escribirLog);
+				sleep(10);
+				pthread_mutex_lock(&escribirLog);
+				sprintf(buffer, "Acabe de tomar un cafe");	
+				sprintf(quienHabla, "Atendedor %d",atendedorActual->id); 
+				writeLogMessage(quienHabla, buffer);
+				pthread_mutex_unlock(&escribirLog);
+			}
 	}
+
+	//TODO esperar hasta que la cola de la actividad social este vacia
 }
 
 
@@ -711,7 +771,7 @@ int calculaAleatorio(int min, int max){
 * FUNCION MANEJADORA PARA LA SENIAL SIGINT, QUE TERMINARA EL PROGRAMA DE MANERA ORDENADA
 *
 **/
-void acabarPrograma(int sig){
+void ignoraSenyales(int sig){
 	char buffer[50], quienHabla[50];
 
 	//TODO 
@@ -725,9 +785,8 @@ void acabarPrograma(int sig){
 		pthread_mutex_unlock(&escribirLog);
 	}else{
 		fin=true;
+		imprimeEstado();
 	}
-
-	imprimeEstado();
 	
 }
 
@@ -913,4 +972,28 @@ int buscarSiguiente(int tipo){
 	}
 
 	return encontrado;
+}
+
+bool estanTodosAtendidos(){
+	int i = 0;
+	bool algunoSinAtender = false;
+
+	pthread_mutex_lock(&datosSolicitud);
+
+	//Cada vez que se elimina una soliicitud de la cola se compacta, asi que solo cabe la posibilidad de que este vacia si la primera posicion esta vacia
+	while(cola[i].id!=-1 && i<tamCola && !algunoSinAtender ){
+		if(cola[i].atendido != ATENDIDO){
+			algunoSinAtender = true;
+		}else{
+			i++;
+		}
+	}
+
+	pthread_mutex_unlock(&datosSolicitud);
+
+	return !algunoSinAtender;
+}
+
+void acabarPrograma(int sig){
+	//TODO deestruir todo, para PEREZ Y ANGEL
 }
