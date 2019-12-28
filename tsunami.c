@@ -323,8 +323,8 @@ void nuevaSolicitud(int sig){
 
 	if(!ignorarSenyales){
 		pthread_mutex_lock(&datosSolicitud);
-		siguiente= posicionSiguiente(SOLICITUD);
-		if(siguiente==-1){
+		siguiente = posicionSiguiente(SOLICITUD);
+		if(siguiente == -1){
 			printf("No se puede anyadir otra solicitud\n");
 			pthread_mutex_lock(&escribirLog);
 			sprintf(buffer, "La solicitud no ha podido entrar porque la cola estaba llena");	
@@ -335,6 +335,9 @@ void nuevaSolicitud(int sig){
 		}else{
 			(*(cola+siguiente)).id = generadorID(SOLICITUD);
 			(*(cola+siguiente)).atendido = PORATENDER;
+			(*(cola+siguiente)).tipoDatos = 69;
+
+			printf("La solicitud %d tiene el flag de atendido a %d\n", (*(cola+siguiente)).id, (*(cola+siguiente)).atendido);
 
 			if(sig == SIGUSR1){ //SIGUSR1 -- invitación
 				(*(cola+siguiente)).tipo = INVITACION;
@@ -473,11 +476,12 @@ void *accionesSolicitud(void *arg){ //Funcion que ejecutan los hilos al crearse
 	pthread_mutex_unlock(&datosSolicitud);
 	
 
-
 	//Ya ha sido atendido
 	pthread_mutex_lock(&datosSolicitud);
 	pthread_mutex_lock(&escribirLog);
 	//aqui el atendedor ya ha seteado la clase de solicitud que somos
+
+	/* TODO esto seria lo suyo
 	if(solicitudActual->tipoDatos==ATENCIONCORRECTA){
 		printf("Mis datos son correctos\n");
 		sprintf(buffer, "Mis datos son correctos");
@@ -488,8 +492,23 @@ void *accionesSolicitud(void *arg){ //Funcion que ejecutan los hilos al crearse
 		printf("¡¡TENGO ANTECEDENTES!!\n");
 		sprintf(buffer, "¡¡TENGO ANTECEDENTES!!");
 	}else{
+		sprintf(buffer, "NO tengo ni puta idea de que tipo son mis datos");
 		printf("ESTO ESTA MAL %d\n", solicitudActual->tipoDatos);
 	}
+	*/
+
+	if(solicitudActual->tipoDatos == ANTECEDENTES){
+		printf("¡¡TENGO ANTECEDENTES!!\n");
+		sprintf(buffer, "¡¡TENGO ANTECEDENTES!!");
+	}else if(solicitudActual->tipoDatos == ERRORESDATOS){
+		printf("Mis datos tienen errores\n");
+		sprintf(buffer, "Mis datos tienen errores");
+	}else{
+		printf("Mis datos son correctos\n");
+		sprintf(buffer, "Mis datos son correctos");
+	}
+
+
 	pthread_mutex_unlock(&datosSolicitud);
 	sprintf(quienHabla, "Solicitud %d", idActual); 
 	writeLogMessage(quienHabla, buffer);
@@ -606,7 +625,8 @@ void *accionesAtendedor(void *arg){
 	int tiempoAtencion;
 	char buffer[100], quienHabla[50];
 
-	while(!estanTodosAtendidos()){
+	//TODO Hay que mirar a ver como se arregla este while para manejar el fin de programa
+	while(true){
 
 			do{
 				pthread_mutex_lock(&datosSolicitud);
@@ -618,19 +638,20 @@ void *accionesAtendedor(void *arg){
 			}while(solicitudAatender == -1);
 
 			aleatorio = calculaAleatorio(1,10);
+			printf("El numero aleatorio calculado es: %d\n", aleatorio);
 
 			if(aleatorio <= 7){
 				(cola[solicitudAatender]).tipoDatos = ATENCIONCORRECTA;
 				tiempoAtencion = calculaAleatorio(1,4);
-				printf("A la solicitud %d le estoy metiendo el tipo %d\n", cola[solicitudAatender].id, cola[solicitudAatender].tipoDatos);
+				printf("A la solicitud %d le estoy metiendo el tipo %d y soy el atendedor %d\n", cola[solicitudAatender].id, cola[solicitudAatender].tipoDatos, atendedorActual->id);
 			}else if(aleatorio <= 9){
 				(cola[solicitudAatender]).tipoDatos = ERRORESDATOS;
 				tiempoAtencion = calculaAleatorio(2,6);
-				printf("A la solicitud %d le estoy metiendo el tipo %d\n", cola[solicitudAatender].id, cola[solicitudAatender].tipoDatos);
+				printf("A la solicitud %d le estoy metiendo el tipo %d y soy el atendedor %d\n", cola[solicitudAatender].id, cola[solicitudAatender].tipoDatos, atendedorActual->id);
 			}else{
 				(cola[solicitudAatender]).tipoDatos = ANTECEDENTES;
 				tiempoAtencion = calculaAleatorio(6,10);
-				printf("A la solicitud %d le estoy metiendo el tipo %d\n", cola[solicitudAatender].id, cola[solicitudAatender].tipoDatos);
+				printf("A la solicitud %d le estoy metiendo el tipo %d y soy el atendedor %d\n", cola[solicitudAatender].id, cola[solicitudAatender].tipoDatos, atendedorActual->id);
 			}
 
 			cola[solicitudAatender].atendido = ATENDIDO;
@@ -831,6 +852,7 @@ void borrarDeLaCola(int id){
 	while(i < tamCola && !encontrado){
 		if(cola[i].id == id){
 			cola[i].id = -1;
+			cola[i].atendido = PORATENDER;
 			encontrado = true;
 		}else{
 			i++;
