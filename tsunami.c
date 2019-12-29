@@ -107,7 +107,7 @@ bool descartar(int val);
 int buscarSiguiente(int tipo);
 void borrarDeLaCola(int id);
 void borrarColaActividad(int id);
-void acabarPrograma(int sig);
+//void acabarPrograma(int sig);
 bool estanTodosAtendidos();
 
 
@@ -158,12 +158,18 @@ int main(int argc, char *argv[]){
 		exit(-1);
 	}
 
+
+	//TODO esto perez y yo creemos que no hace falta, en vez de usar otra senial y otra manejadora podemos usar join a los hilos atendedor y coordinador social 
+
+
+	/*
 	sFinalizar.sa_handler = acabarPrograma;
 
 	if(sigaction(SIGTRAP, &sFinalizar, NULL) == -1){
 		perror("Error al comunicar la finalizacion del programa");
 		exit(-1);
 	}
+	*/
 
 	if(argc==2){
 		tamCola = atoi(argv[1]);
@@ -247,6 +253,13 @@ int main(int argc, char *argv[]){
 
 	while(fin==false){ //TODO ES ESTA LA MEJOR OPCION? puede ser que intente comprobar si se ha llegado al final antes de que fin=true en la manejadora
 		pause(); //TODO hay que comprobar el fin de programa dentro de un mutex
+	}
+
+	//Aqui ya ha llegado la senial de que se acaba el programa, asique espero a que se mueran los atendedores y el coordinador social
+	pthread_join(coordinador,NULL);
+
+	for(int i = 0; i < numeroAtendedores; i++){
+		pthread_join((*(atendedores+i)).tid,NULL);
 	}
 
 
@@ -474,7 +487,6 @@ void *accionesSolicitud(void *arg){ //Funcion que ejecutan los hilos al crearse
 		pthread_mutex_lock(&datosSolicitud);	
 	}
 	pthread_mutex_unlock(&datosSolicitud);
-	
 
 	//Ya ha sido atendido
 	pthread_mutex_lock(&datosSolicitud);
@@ -508,10 +520,11 @@ void *accionesSolicitud(void *arg){ //Funcion que ejecutan los hilos al crearse
 		sprintf(buffer, "Mis datos son correctos");
 	}
 
-
-	pthread_mutex_unlock(&datosSolicitud);
 	sprintf(quienHabla, "Solicitud %d", idActual); 
 	writeLogMessage(quienHabla, buffer);
+
+	pthread_mutex_unlock(&datosSolicitud);
+
 	pthread_mutex_unlock(&escribirLog);
 
 	pthread_mutex_lock(&datosSolicitud);
@@ -542,6 +555,7 @@ void *accionesSolicitud(void *arg){ //Funcion que ejecutan los hilos al crearse
 		pthread_exit(NULL);
 
 	}else{
+
 		pthread_mutex_unlock(&datosSolicitud);
 		pthread_mutex_lock(&escribirLog);
 		sprintf(buffer, "Estoy lista para participar en la actividad social.");	
@@ -549,9 +563,23 @@ void *accionesSolicitud(void *arg){ //Funcion que ejecutan los hilos al crearse
 		writeLogMessage(quienHabla, buffer);
 		pthread_mutex_unlock(&escribirLog);
 
-		//TODO Hay que comprobar si fin==false para que no puedan entrar solicitudes a la cola de la actividad cuando ya se ha acabado el programa
+		//Aqui la solicitud ya ha sido atendida y sabe de que tipo son sus datos, si se ha acabado el programa sse autodestruye
+		if(fin){
+			sprintf(buffer, "Me autodestruyo debido a que se ha dado la orden de acabar el programa.");
+			writeLogMessage(quienHabla, buffer);
+
+			//TODO Comprobar si esto esta bien
+			pthread_mutex_lock(&datosSolicitud);
+			borrarDeLaCola(idActual);
+			pthread_mutex_unlock(&datosSolicitud);
+
+			pthread_exit(NULL);
+		}
+
 		pthread_mutex_lock(&actividadSocial);
 
+		//TODO Hay que ver como manejamos las solicitudes que ya se han metido en ese wait antes de que llegue la senial de fin de programa
+		//Creemos que la unica manera de hacerlo es hcer un destroy a estas solicitudes. 
 
 		while(!candadoEntrarActividad){
 			pthread_cond_wait(&candado, &actividadSocial);
@@ -625,17 +653,24 @@ void *accionesAtendedor(void *arg){
 	int tiempoAtencion;
 	char buffer[100], quienHabla[50];
 
-	//TODO Hay que mirar a ver como se arregla este while para manejar el fin de programa
-	while(true){
+	//TODO Comprobar
 
-			do{
-				pthread_mutex_lock(&datosSolicitud);
-				solicitudAatender = buscarSiguiente(atendedorActual->tipo);
-				if(solicitudAatender == -1){
-					pthread_mutex_unlock(&datosSolicitud);
-					sleep(1);
-				}
-			}while(solicitudAatender == -1);
+	pthread_mutex_lock(&comprobarFin);
+
+	sprintf(quienHabla, "Atendedor %d", atendedorActual->id);
+
+	//TODO comprobar por que solo se autodestruye bien el atendedor 3, los demas se quedan por ahi en algun sitio
+
+	while(!estanTodosAtendidos() || !fin){
+
+		pthread_mutex_unlock(&comprobarFin);
+
+		pthread_mutex_lock(&datosSolicitud);
+		solicitudAatender = buscarSiguiente(atendedorActual->tipo);
+		if(solicitudAatender == -1){
+				pthread_mutex_unlock(&datosSolicitud);
+				sleep(1);
+		}else{
 
 			aleatorio = calculaAleatorio(1,10);
 			printf("El numero aleatorio calculado es: %d\n", aleatorio);
@@ -668,17 +703,31 @@ void *accionesAtendedor(void *arg){
 				//le toca tomar el cafe
 				pthread_mutex_lock(&escribirLog);
 				sprintf(buffer, "Voy a tomar un cafe llevo %d",atendedorActual->numSolicitudes);	
-				sprintf(quienHabla, "Atendedor %d",atendedorActual->id); 
+				//sprintf(quienHabla, "Atendedor %d",atendedorActual->id); 
 				writeLogMessage(quienHabla, buffer);
 				pthread_mutex_unlock(&escribirLog);
 				sleep(10);
 				pthread_mutex_lock(&escribirLog);
 				sprintf(buffer, "Acabe de tomar un cafe");	
-				sprintf(quienHabla, "Atendedor %d",atendedorActual->id); 
+				//sprintf(quienHabla, "Atendedor %d",atendedorActual->id); 
 				writeLogMessage(quienHabla, buffer);
 				pthread_mutex_unlock(&escribirLog);
 			}
+		}
+		pthread_mutex_lock(&comprobarFin);
 	}
+
+	pthread_mutex_unlock(&comprobarFin);
+
+	//Aqui ya se ha atendido a todo el mundo y ya ha llegado la senial de fin de programa, asique el atendedor se autodestruye
+	sprintf(buffer, "Me autodestruyo");
+
+	pthread_mutex_lock(&escribirLog);
+	writeLogMessage(quienHabla, buffer);
+	pthread_mutex_unlock(&escribirLog);
+
+	pthread_exit(NULL);
+
 
 	//TODO esperar hasta que la cola de la actividad social este vacia
 }
@@ -702,7 +751,12 @@ void *accionesCoordinadorSocial(void *arg){
 
 	char buffer[50], quienHabla[50];
 
-	while(fin==false){
+
+	pthread_mutex_lock(&comprobarFin);
+	while(fin == false){
+		pthread_mutex_unlock(&comprobarFin);
+
+
 		pthread_mutex_lock(&actividadSocial);
 
 		pthread_cond_wait(&avisarCoordinador, &actividadSocial);
@@ -711,6 +765,7 @@ void *accionesCoordinadorSocial(void *arg){
 		pthread_cond_broadcast(&empezadActividad);
 
 		pthread_mutex_lock(&escribirLog);
+		printf("La actividad puede comenzar\n");
 		sprintf(buffer, "La actividad puede comenzar");	
 		sprintf(quienHabla, "Coordinador"); 
 		writeLogMessage(quienHabla, buffer);
@@ -730,10 +785,20 @@ void *accionesCoordinadorSocial(void *arg){
 
 		pthread_mutex_unlock(&actividadSocial);
 
+		pthread_mutex_lock(&comprobarFin);
 
 	}
 
+	pthread_mutex_unlock(&comprobarFin);
 
+	//Como he salido del bucle, se ha acabado el programa y se destruye el hilo
+	sprintf(buffer, "Me autodestruyo");
+
+	pthread_mutex_lock(&escribirLog);
+	writeLogMessage(quienHabla, buffer);
+	pthread_mutex_unlock(&escribirLog);
+
+	pthread_exit(NULL);
 
 }
 
@@ -806,6 +871,12 @@ void ignoraSenyales(int sig){
 		pthread_mutex_unlock(&escribirLog);
 	}else{
 		fin=true;
+		sprintf(buffer, "Ha llegado la senial de fin de programa");
+		sprintf(quienHabla, "Sistema"); 
+		pthread_mutex_lock(&escribirLog);
+		writeLogMessage(quienHabla, buffer);
+		pthread_mutex_unlock(&escribirLog);
+
 		imprimeEstado();
 	}
 	
@@ -1016,6 +1087,10 @@ bool estanTodosAtendidos(){
 	return !algunoSinAtender;
 }
 
+/*
 void acabarPrograma(int sig){
-	//TODO deestruir todo, para PEREZ Y ANGEL
+	//TODO Comprobar si esto hace falta
+	//TODO destruir todo, para ANGEL
+	//Realmente solo hay que destruir todo lo que esta siempre, es decir, mutex, atendedores, etc.
 }
+*/
