@@ -158,19 +158,6 @@ int main(int argc, char *argv[]){
 		exit(-1);
 	}
 
-
-	//TODO esto perez y Bayon creemos que no hace falta, en vez de usar otra senyal y otra manejadora podemos usar join a los hilos atendedor y coordinador social 
-
-
-	/*
-	sFinalizar.sa_handler = acabarPrograma;
-
-	if(sigaction(SIGTRAP, &sFinalizar, NULL) == -1){
-		perror("Error al comunicar la finalizacion del programa");
-		exit(-1);
-	}
-	*/
-
 	if(argc==2){
 		tamCola = atoi(argv[1]);
 		numeroAtendedores = 3;	
@@ -251,18 +238,16 @@ int main(int argc, char *argv[]){
 
 	pthread_create(&coordinador, NULL, accionesCoordinadorSocial, NULL);
 
-	//Creo que hay que quitar este bucle porque puede ser que se salga del pause antes de que se haya puesto fin a false y no se acabara el programa hasta que llegue otra senyal
-
-	/*while(!fin){ //TODO ES ESTA LA MEJOR OPCION? puede ser que intente comprobar si se ha llegado al final antes de que fin=true en la manejadora
-		pause(); //TODO hay que comprobar el fin de programa dentro de un mutex
-	}*/
-
-	//Aqui ya ha llegado la senial de que se acaba el programa, asique espero a que se mueran los atendedores y el coordinador social
 	//pthread_join(coordinador,NULL);
+
+	printf("Puedes empezar a mandar senyales\n");
 
 	for(int i = 0; i < numeroAtendedores; i++){
 		pthread_join((*(atendedores+i)).tid,NULL);
 	}
+
+	pthread_cancel(coordinador);
+
 	printf("ACABANDO\n");
 	//TODO comprobar si esto esta bien
 	for(int i = 0; i < tamCola; i++){
@@ -293,26 +278,47 @@ int main(int argc, char *argv[]){
 	sprintf(quienHabla,"Sistema"); 
 	writeLogMessage(quienHabla, buffer);
 	pthread_mutex_unlock(&escribirLog);
-	//TODO LIBERAR TODOS LOS PUNTEROS, DESTRUIR MUTEX, ETC
-	
 
+
+	//TODO LIBERAR TODOS LOS PUNTEROS, DESTRUIR MUTEX, ETC
 	free(cola);
 	free(atendedores);
 	
-	pthread_cond_destroy(&empezadActividad);
-	printf("empezadActividad\n");
-	pthread_cond_destroy(&candadoActividadAbierto);
-	printf("candadoActividadAbierto\n");
-	pthread_cond_destroy(&avisarCoordinador);
-	printf("avisarCoordinador\n");
 
-	pthread_mutex_destroy(&datosSolicitud);
-	pthread_mutex_destroy(&actividadSocial);
-	pthread_mutex_destroy(&escribirLog);
-	pthread_mutex_destroy(&comprobarFin);
-	
-	
-	
+	if(pthread_cond_destroy(&empezadActividad) != 0){
+		perror("Error al destruir empezadActividad");	
+		exit(-1);
+	}
+
+	if(pthread_cond_destroy(&candadoActividadAbierto) != 0){
+		perror("Error al destruir candadoActividadAbierto");	
+		exit(-1);
+	}
+
+	if(pthread_cond_destroy(&avisarCoordinador) != 0){
+		perror("Error al destruir avisarCoordinador");	
+		exit(-1);
+	}
+
+	if(pthread_mutex_destroy(&datosSolicitud) != 0){
+		perror("Error al destruir datosSolicitud");	
+		exit(-1);
+	}
+
+	if(pthread_mutex_destroy(&actividadSocial) != 0){ //TODO esto da error
+		perror("Error al destruir actividadSocial");	
+		exit(-1);
+	}
+
+	if(pthread_mutex_destroy(&escribirLog) != 0){
+		perror("Error al destruir escribirLog");	
+		exit(-1);
+	}
+
+	if(pthread_mutex_destroy(&comprobarFin) != 0){
+		perror("Error al destruir comprobarFin");	
+		exit(-1);
+	}
 
 	return 0;
 }
@@ -625,6 +631,7 @@ void *accionesSolicitud(void *arg){ //Funcion que ejecutan los hilos al crearse
 		//Creemos que la unica manera de hacerlo es hacer un destroy a estas solicitudes. 
 
 		while(!candadoEntrarActividad){
+			printf("Estoy esperando a que empiece la actividad\n");
 			pthread_cond_wait(&candadoActividadAbierto, &actividadSocial);
 		}
 
@@ -804,8 +811,11 @@ void *accionesCoordinadorSocial(void *arg){
 
 		pthread_mutex_lock(&actividadSocial);
 
+		printf("Coordinador: He entrado en el mutex de la actividad\n");
+
 		pthread_cond_wait(&avisarCoordinador, &actividadSocial);
 		candadoEntrarActividad = false;
+
 
 		pthread_cond_broadcast(&empezadActividad);
 
@@ -830,6 +840,7 @@ void *accionesCoordinadorSocial(void *arg){
 
 		//TODO comprobar si esto esta bien
 		pthread_cond_broadcast(&candadoActividadAbierto);
+		printf("Coordinador: Acabo de avisar a las solicitudes para que empiecen la actividad");
 
 		pthread_mutex_unlock(&actividadSocial);
 
