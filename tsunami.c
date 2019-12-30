@@ -260,11 +260,10 @@ int main(int argc, char *argv[]){
 	//Aqui ya ha llegado la senial de que se acaba el programa, asique espero a que se mueran los atendedores y el coordinador social
 	//pthread_join(coordinador,NULL);
 
-
 	for(int i = 0; i < numeroAtendedores; i++){
 		pthread_join((*(atendedores+i)).tid,NULL);
 	}
-
+	printf("ACABANDO\n");
 	//TODO comprobar si esto esta bien
 	for(int i = 0; i < tamCola; i++){
 
@@ -273,29 +272,47 @@ int main(int argc, char *argv[]){
 		}
 	}
 
-	//TODO estara mal seguramente
-	pthread_cond_signal(&avisarCoordinador);
+	for(int i = 0; i < TAMACTIVIDAD; i++){
 
-	pthread_join(coordinador,NULL);
+		if((colaActividadSocial+i)->id !=-1){
+			pthread_cancel((colaActividadSocial+i)->tid);
+		}
+	}
+	printf("Terminado for\n");
 
-	//TODO LIBERAR TODOS LOS PUNTEROS, DESTRUIR MUTEX, ETC
-	free(cola);
-	free(atendedores);
+	pthread_cancel(coordinador);
+	pthread_mutex_lock(&escribirLog);
+	sprintf(buffer, "Coordinador ha fallecido"); //TODO comprobar que esto se escribe lo ultimo
+	sprintf(quienHabla,"Sistema"); 
+	writeLogMessage(quienHabla, buffer);
+	pthread_mutex_unlock(&escribirLog);
 
-	pthread_mutex_destroy(&datosSolicitud);
-	pthread_mutex_destroy(&actividadSocial);
-	pthread_mutex_destroy(&escribirLog);
-	pthread_mutex_destroy(&comprobarFin);
-
-	pthread_cond_destroy(&empezadActividad);
-	pthread_cond_destroy(&avisarCoordinador);
-	pthread_cond_destroy(&candadoActividadAbierto);
-
+	//pthread_join(coordinador,NULL);
 	pthread_mutex_lock(&escribirLog);
 	sprintf(buffer, "Se ha acabado el programa"); //TODO comprobar que esto se escribe lo ultimo
 	sprintf(quienHabla,"Sistema"); 
 	writeLogMessage(quienHabla, buffer);
 	pthread_mutex_unlock(&escribirLog);
+	//TODO LIBERAR TODOS LOS PUNTEROS, DESTRUIR MUTEX, ETC
+	
+
+	free(cola);
+	free(atendedores);
+	
+	pthread_cond_destroy(&empezadActividad);
+	printf("empezadActividad\n");
+	pthread_cond_destroy(&candadoActividadAbierto);
+	printf("candadoActividadAbierto\n");
+	pthread_cond_destroy(&avisarCoordinador);
+	printf("avisarCoordinador\n");
+
+	pthread_mutex_destroy(&datosSolicitud);
+	pthread_mutex_destroy(&actividadSocial);
+	pthread_mutex_destroy(&escribirLog);
+	pthread_mutex_destroy(&comprobarFin);
+	
+	
+	
 
 	return 0;
 }
@@ -823,13 +840,13 @@ void *accionesCoordinadorSocial(void *arg){
 	pthread_mutex_unlock(&comprobarFin);
 
 	//Como he salido del bucle, se ha acabado el programa y se destruye el hilo
-	sprintf(buffer, "Me autodestruyo");
+	/*sprintf(buffer, "Me autodestruyo");
 
 	pthread_mutex_lock(&escribirLog);
 	writeLogMessage(quienHabla, buffer);
 	pthread_mutex_unlock(&escribirLog);
 
-	pthread_exit(NULL);
+	pthread_exit(NULL);*/
 
 }
 
@@ -892,8 +909,9 @@ void ignoraSenyales(int sig){
 	char buffer[50], quienHabla[50];
 
 	//TODO 
-
+	pthread_mutex_lock(&comprobarFin);
 	if(fin){
+		pthread_mutex_unlock(&comprobarFin);
 		printf("Ya se esta trabajando en finalizar el programa");
 		pthread_mutex_lock(&escribirLog);
 		sprintf(buffer, "Ya se esta trabajando en finalizar el programa");
@@ -902,14 +920,15 @@ void ignoraSenyales(int sig){
 		pthread_mutex_unlock(&escribirLog);
 	}else{
 		fin=true;
+		pthread_mutex_unlock(&comprobarFin);
 		sprintf(buffer, "Ha llegado la senial de fin de programa");
 		sprintf(quienHabla, "Sistema"); 
 		pthread_mutex_lock(&escribirLog);
 		writeLogMessage(quienHabla, buffer);
 		pthread_mutex_unlock(&escribirLog);
-
 		imprimeEstado();
 	}
+	
 	
 }
 
