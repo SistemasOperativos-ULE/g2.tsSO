@@ -285,21 +285,6 @@ int main(int argc, char *argv[]){
 	free(atendedores);
 	
 
-	if(pthread_cond_destroy(&empezadActividad) != 0){
-		perror("Error al destruir empezadActividad");	
-		exit(-1);
-	}
-
-	if(pthread_cond_destroy(&candadoActividadAbierto) != 0){
-		perror("Error al destruir candadoActividadAbierto");	
-		exit(-1);
-	}
-
-	if(pthread_cond_destroy(&avisarCoordinador) != 0){
-		perror("Error al destruir avisarCoordinador");	
-		exit(-1);
-	}
-
 	if(pthread_mutex_destroy(&datosSolicitud) != 0){
 		perror("Error al destruir datosSolicitud");	
 		exit(-1);
@@ -317,6 +302,21 @@ int main(int argc, char *argv[]){
 
 	if(pthread_mutex_destroy(&comprobarFin) != 0){
 		perror("Error al destruir comprobarFin");	
+		exit(-1);
+	}
+
+	if(pthread_cond_destroy(&empezadActividad) != 0){
+		perror("Error al destruir empezadActividad");	
+		exit(-1);
+	}
+
+	if(pthread_cond_destroy(&candadoActividadAbierto) != 0){
+		perror("Error al destruir candadoActividadAbierto");	
+		exit(-1);
+	}
+
+	if(pthread_cond_destroy(&avisarCoordinador) != 0){
+		perror("Error al destruir avisarCoordinador");	
 		exit(-1);
 	}
 
