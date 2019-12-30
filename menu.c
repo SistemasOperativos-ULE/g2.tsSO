@@ -30,6 +30,8 @@ int main(){
 				printf("Se ha introducido un numero raro\n");
 		}
 	}while(num!=0);
+
+	return 0;
 }
 
 void menu(){

@@ -58,7 +58,7 @@ int tamCola;
 
 pthread_mutex_t datosSolicitud, actividadSocial, escribirLog, comprobarFin;
 
-pthread_cond_t empezadActividad, avisarCoordinador, candado;
+pthread_cond_t empezadActividad, avisarCoordinador, candadoActividadAbierto;
 
 struct atendedor{
 	int id;
@@ -74,7 +74,7 @@ int numeroAtendedores;
 //Contador de solicitudes
 struct solicitud *cola; //El tamanyo en principio es 15, pero puede variar
 
-struct solicitud colaActividadSocial[TAMACTIVIDAD]; //TODO
+struct solicitud colaActividadSocial[TAMACTIVIDAD];
 
 int contadorActividad;
 
@@ -159,7 +159,7 @@ int main(int argc, char *argv[]){
 	}
 
 
-	//TODO esto perez y yo creemos que no hace falta, en vez de usar otra senial y otra manejadora podemos usar join a los hilos atendedor y coordinador social 
+	//TODO esto perez y Bayon creemos que no hace falta, en vez de usar otra senyal y otra manejadora podemos usar join a los hilos atendedor y coordinador social 
 
 
 	/*
@@ -184,32 +184,32 @@ int main(int argc, char *argv[]){
 
 	
 	if(pthread_mutex_init(&datosSolicitud, NULL) != 0) {
-		//Error en la inicializacion del mutex
+		perror("Error en la inicializacion de un mutex");
 		exit(-1);
 	}
 
 	if(pthread_mutex_init(&actividadSocial, NULL) != 0) {
-		//Error en la inicializacion del mutex
+		perror("Error en la inicializacion de un mutex");
 		exit(-1);
 	}
 
 	if(pthread_mutex_init(&comprobarFin, NULL) != 0) {
-	//Error en la inicializacion del mutex
-	exit(-1);
+		perror("Error en la inicializacion de un mutex");		
+		exit(-1);
 	}
 
 	if(pthread_cond_init(&avisarCoordinador,NULL) != 0){
-		//Error en la inicializacion del mutex
+		perror("Error en la inicializacion de una variable condicion");	
 		exit(-1);
 	}
 
 	if(pthread_cond_init(&empezadActividad,NULL) != 0){
-		//Error en la inicializacion del mutex
+		perror("Error en la inicializacion de una variable condicion");	
 		exit(-1);
 	}
 
-	if(pthread_cond_init(&candado,NULL) != 0){
-		//Error en la inicializacion del mutex
+	if(pthread_cond_init(&candadoActividadAbierto,NULL) != 0){
+		perror("Error en la inicializacion de una variable condicion");	
 		exit(-1);
 	}
 
@@ -251,21 +251,45 @@ int main(int argc, char *argv[]){
 
 	pthread_create(&coordinador, NULL, accionesCoordinadorSocial, NULL);
 
-	while(fin==false){ //TODO ES ESTA LA MEJOR OPCION? puede ser que intente comprobar si se ha llegado al final antes de que fin=true en la manejadora
+	//Creo que hay que quitar este bucle porque puede ser que se salga del pause antes de que se haya puesto fin a false y no se acabara el programa hasta que llegue otra senyal
+
+	/*while(!fin){ //TODO ES ESTA LA MEJOR OPCION? puede ser que intente comprobar si se ha llegado al final antes de que fin=true en la manejadora
 		pause(); //TODO hay que comprobar el fin de programa dentro de un mutex
-	}
+	}*/
 
 	//Aqui ya ha llegado la senial de que se acaba el programa, asique espero a que se mueran los atendedores y el coordinador social
-	pthread_join(coordinador,NULL);
+	//pthread_join(coordinador,NULL);
+
 
 	for(int i = 0; i < numeroAtendedores; i++){
 		pthread_join((*(atendedores+i)).tid,NULL);
 	}
 
+	//TODO comprobar si esto esta bien
+	for(int i = 0; i < tamCola; i++){
+
+		if((*(cola+i)).id !=-1){
+			pthread_cancel((*(cola+i)).tid);
+		}
+	}
+
+	//TODO estara mal seguramente
+	pthread_cond_signal(&avisarCoordinador);
+
+	pthread_join(coordinador,NULL);
 
 	//TODO LIBERAR TODOS LOS PUNTEROS, DESTRUIR MUTEX, ETC
 	free(cola);
 	free(atendedores);
+
+	pthread_mutex_destroy(&datosSolicitud);
+	pthread_mutex_destroy(&actividadSocial);
+	pthread_mutex_destroy(&escribirLog);
+	pthread_mutex_destroy(&comprobarFin);
+
+	pthread_cond_destroy(&empezadActividad);
+	pthread_cond_destroy(&avisarCoordinador);
+	pthread_cond_destroy(&candadoActividadAbierto);
 
 	pthread_mutex_lock(&escribirLog);
 	sprintf(buffer, "Se ha acabado el programa"); //TODO comprobar que esto se escribe lo ultimo
@@ -338,7 +362,7 @@ void nuevaSolicitud(int sig){
 		pthread_mutex_lock(&datosSolicitud);
 		siguiente = posicionSiguiente(SOLICITUD);
 		if(siguiente == -1){
-			printf("No se puede anyadir otra solicitud\n");
+			printf("No se puede anyadir otra solicitud, la cola esta llena\n");
 			pthread_mutex_lock(&escribirLog);
 			sprintf(buffer, "La solicitud no ha podido entrar porque la cola estaba llena");	
 			sprintf(quienHabla,"Sistema"); 
@@ -348,7 +372,7 @@ void nuevaSolicitud(int sig){
 		}else{
 			(*(cola+siguiente)).id = generadorID(SOLICITUD);
 			(*(cola+siguiente)).atendido = PORATENDER;
-			(*(cola+siguiente)).tipoDatos = 69;
+			//(*(cola+siguiente)).tipoDatos = -1; //TODO esto es necesario???
 
 			printf("La solicitud %d tiene el flag de atendido a %d\n", (*(cola+siguiente)).id, (*(cola+siguiente)).atendido);
 
@@ -408,6 +432,9 @@ void *accionesSolicitud(void *arg){ //Funcion que ejecutan los hilos al crearse
 	*	10- Fin del hilo de usuario
 	*
 	**/
+
+	//TODO comprobar esto
+	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 
 	//TODO ojo con los mutex datosSolicitud en esta funcion
 
@@ -493,7 +520,7 @@ void *accionesSolicitud(void *arg){ //Funcion que ejecutan los hilos al crearse
 	pthread_mutex_lock(&escribirLog);
 	//aqui el atendedor ya ha seteado la clase de solicitud que somos
 
-	/* TODO esto seria lo suyo
+	/* TODO comprobar que no imprime que no tiene ni puta idea
 	if(solicitudActual->tipoDatos==ATENCIONCORRECTA){
 		printf("Mis datos son correctos\n");
 		sprintf(buffer, "Mis datos son correctos");
@@ -506,8 +533,7 @@ void *accionesSolicitud(void *arg){ //Funcion que ejecutan los hilos al crearse
 	}else{
 		sprintf(buffer, "NO tengo ni puta idea de que tipo son mis datos");
 		printf("ESTO ESTA MAL %d\n", solicitudActual->tipoDatos);
-	}
-	*/
+	}*/
 
 	if(solicitudActual->tipoDatos == ANTECEDENTES){
 		printf("¡¡TENGO ANTECEDENTES!!\n");
@@ -579,10 +605,10 @@ void *accionesSolicitud(void *arg){ //Funcion que ejecutan los hilos al crearse
 		pthread_mutex_lock(&actividadSocial);
 
 		//TODO Hay que ver como manejamos las solicitudes que ya se han metido en ese wait antes de que llegue la senial de fin de programa
-		//Creemos que la unica manera de hacerlo es hcer un destroy a estas solicitudes. 
+		//Creemos que la unica manera de hacerlo es hacer un destroy a estas solicitudes. 
 
 		while(!candadoEntrarActividad){
-			pthread_cond_wait(&candado, &actividadSocial);
+			pthread_cond_wait(&candadoActividadAbierto, &actividadSocial);
 		}
 
 
@@ -619,7 +645,7 @@ void *accionesSolicitud(void *arg){ //Funcion que ejecutan los hilos al crearse
 		contadorActividad--;
 
 		if(contadorActividad == 0){
-			printf("SEEEEEEEE ACABOOOOO\n");
+			printf("FIN DE LA ACTIVIDAD\n");
 			pthread_cond_signal(&avisarCoordinador); //Avisa de que ya han salido todos de la actividad
 		}
 
@@ -702,13 +728,13 @@ void *accionesAtendedor(void *arg){
 			if((atendedorActual->numSolicitudes % 5 == 0) && (atendedorActual->numSolicitudes!=0)){
 				//le toca tomar el cafe
 				pthread_mutex_lock(&escribirLog);
-				sprintf(buffer, "Voy a tomar un cafe llevo %d",atendedorActual->numSolicitudes);	
+				sprintf(buffer, "Voy a tomar un cafe, llevo %d",atendedorActual->numSolicitudes);	
 				//sprintf(quienHabla, "Atendedor %d",atendedorActual->id); 
 				writeLogMessage(quienHabla, buffer);
 				pthread_mutex_unlock(&escribirLog);
 				sleep(10);
 				pthread_mutex_lock(&escribirLog);
-				sprintf(buffer, "Acabe de tomar un cafe");	
+				sprintf(buffer, "Ya he tomado el cafe");	
 				//sprintf(quienHabla, "Atendedor %d",atendedorActual->id); 
 				writeLogMessage(quienHabla, buffer);
 				pthread_mutex_unlock(&escribirLog);
@@ -748,6 +774,8 @@ void *accionesCoordinadorSocial(void *arg){
 	* 6- EM Abre la lista de nuevo y vuelve al paso 1
 	*
 	**/
+	//TODO comprobar esto
+	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 
 	char buffer[50], quienHabla[50];
 
@@ -782,6 +810,9 @@ void *accionesCoordinadorSocial(void *arg){
 
 
 		candadoEntrarActividad = true;
+
+		//TODO comprobar si esto esta bien
+		pthread_cond_broadcast(&candadoActividadAbierto);
 
 		pthread_mutex_unlock(&actividadSocial);
 
