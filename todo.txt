@@ -1,4 +1,4 @@
-//version 0.02
+//version 0.5
 
 IDENTIFICADORES:
       A: Angel Lopez Arias
@@ -20,3 +20,23 @@ D - Fusión del fichero de prueba con el fichero de la práctica definitiva.
 * - Creado codigo de los atendedores, refactorizado el codigo de la creacion de los atendedores y solucionados errores de codigo en distintos puntos del codigo.
 * - Solucionado error en la funcion posicionSiguiente que daba un core dumped (la busqueda estaba mal hecha)
 * - Solucionado error de sintaxis que causaba que se generasen mal las ids de las solicitudes
+D - Avances en la funcion accionesSolicitud siguiendo el esquema de diseño
+* - Primeros avances en la implementacion de los mutex necesarios, añadidos cambios en el main y en la recepcion de nuevas solicitudes. Planteadas ideas de getters.
+* - Revision de codigo y resuelto error Core Dumped.
+* - Adaptación del codigo testeado en el fichero de pruebas al fichero principal.
+D - Cambios pequeños para clarificar el codigo, como por ejemplo mejores nombres de variables.
+* - Añadidas variables condicion y codigo de solicitudes referido a las actividades sociales
+* - Actualizacion de codigo de las actividades sociales y el coordinador (añadidos mutex para la actividad social y para la escritura de logs)
+* - Inicializacion de atendedores en el main e implementada idea para manejar las actividades sociales a traves de variables candado y condición.
+* - Implementada manejadora del fin de programa.
+D - Añadidos logs al programa
+* - Añadidas secciones criticas necesarias manejadas por el mutex de datosSolicitud.
+* - Modificacion en acciones solicitud en lo referido a escrituras en el log.
+* - Arreglado metodo buscarSiguiente, añadidos logs y corregidos errores en bloqueo de mutex.
+A - Añadido fichero con menu para enviar señales a traves de la consola sin tener que buscar el pid y enviarlas manualmente.
+DB - Añadidos logs y avances en la parte de manejo de la señal de fin de programa, encontrado error en el tipo de datos de las solicitudes.
+PB - Añadidas librerias que hacian falta para probar correctamente el menu, retocado algun pequeño error de codigo y añadidos printf para debugear.
+PDB - Implementado codigo para manejar el fin de programa, faltan los destroy de los hilos, mutex, etc (lo que hara que ese codigo ya no funcione)
+D - Cambios de prueba para matar de diferentes formas los hilos en el fin de programa.
+* - Añadidos logs sobre el fin de programa y realizados cambios en el codigo para evitar que el programa se quede en espera y no finalice correctamente.
+* - Cambios en las destrucciones de mutex y variables condicion, haciendo pruebas para evitar error en la destruccion de uno de los mutex.
