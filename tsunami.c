@@ -100,8 +100,10 @@ int calculaAleatorio(int min, int max);
 void finPrograma(int sig);
 void compactar();
 
+
 //TODO cuando este acabado el programa esta funcion ya no hace falta
 void imprimeEstado();
+
 
 int posicionSiguiente(int tipoCola);
 void nuevoAtendedor(int tipo);

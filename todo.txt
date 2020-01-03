@@ -40,3 +40,4 @@ PDB - Implementado codigo para manejar el fin de programa, faltan los destroy de
 D - Cambios de prueba para matar de diferentes formas los hilos en el fin de programa.
 * - Añadidos logs sobre el fin de programa y realizados cambios en el codigo para evitar que el programa se quede en espera y no finalice correctamente.
 * - Cambios en las destrucciones de mutex y variables condicion, haciendo pruebas para evitar error en la destruccion de uno de los mutex.
+DB - Revisados y arreglados varios TODOs y solucionado error al setear el flag de atendido de las solicitudes.
