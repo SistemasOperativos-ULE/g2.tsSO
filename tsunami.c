@@ -993,6 +993,7 @@ void aumentarNumSolicitudes(int sig){
 
     	do{
     		printf("Introduzca el numero de solicitudes que desea que existan en el sistema: \n");
+    		printf("(Debe ser mayor que %d)\n", tamCola);
 		    scanf("%d",&numSolicitudes);
     	}while(numSolicitudes<=tamCola);
 		    
@@ -1005,6 +1006,9 @@ void aumentarNumSolicitudes(int sig){
 
 	 
 	    cola = (struct solicitud *)realloc(cola, numSolicitudes*sizeof(struct solicitud *));
+	    for(int i=tamCola; i<numSolicitudes; i++){
+	    	cola[i].id = -1;
+	    }
 
 	    tamCola = numSolicitudes;
 
@@ -1033,7 +1037,8 @@ void aumentarNumAtendedores(int sig){
     }else{
 
     	do{
-		    printf("Introduzca el numero de solicitudes que desea que existan en el sistema: \n");
+		    printf("Introduzca el numero de atendedores que desea que existan en el sistema: \n");
+		    printf("(Debe ser mayor que %d)\n", numeroAtendedores);
 		    scanf("%d",&numNuevosAtendedores);
 		}while(numNuevosAtendedores<=numeroAtendedores);
 
