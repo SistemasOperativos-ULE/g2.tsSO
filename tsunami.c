@@ -21,8 +21,6 @@
 //senyales
 #include <signal.h>
 
-#include <sys/syscall.h>
-
 #define QR 0 //Usuarios que intentan acceder por QR
 #define INVITACION 1 //Usuarios que intentan acceder por invitacion
 #define PRO 3
@@ -50,7 +48,7 @@ struct solicitud{
 	int tipo; //INVITACION = 1; QR = 0
 	int atendido; //posicion 0 sin atender, 1 siendo atendido, 2 ya ha sido atendido
 	pthread_t tid;
-	int tipoDatos; //Atencion correcta(1), errores en los datos(2) o antecedentes(3)
+	int tipoDatos; //Atencion correcta, errores en los datos o antecedentes policiales
 };
 
 int idSolicitud;
@@ -72,10 +70,9 @@ struct atendedor{
 int idAtendedor;
 
 struct atendedor *atendedores; //Punteros para que se pueda modificar el numero de atendedores dinamicamente
-
 int numeroAtendedores;
-
-struct solicitud *cola;
+//Contador de solicitudes
+struct solicitud *cola; //El tamanyo en principio es 15, pero puede variar
 
 struct solicitud colaActividadSocial[TAMACTIVIDAD];
 
@@ -92,8 +89,6 @@ bool fin;
 * DECLARACIONES DE FUNCIONES
 *
 **/
-//TODO eliminar declaraciones sobrantes
-
 void nuevaSolicitud(int sig);
 void *accionesSolicitud(void *arg);
 void *accionesAtendedor(void *arg);
@@ -112,8 +107,9 @@ void borrarColaActividad(int id);
 bool estanTodosAtendidos();
 void aumentarNumAtendedores(int sig);
 void aumentarNumSolicitudes(int sig);
-void borrarTodo();
 
+
+//Se usa la notacion EM para zonas de exclusion mutua y VC para zonas en las que se deben usar variables condicion
 
 /** 
 * FUNCION PRINCIPAL
@@ -124,7 +120,6 @@ int main(int argc, char *argv[]){
 	struct sigaction sLlegaSolicitud, sPrepararFin, sFinalizar, sAumentarSolicitudes, sAumentarAtendedores;
 	pthread_t coordinador;
 	char buffer[100], quienHabla[50];
-
 	sLlegaSolicitud.sa_handler = nuevaSolicitud;
 
 	if(sigaction(SIGUSR1, &sLlegaSolicitud, NULL) == -1){
@@ -236,65 +231,48 @@ int main(int argc, char *argv[]){
 
 	pthread_create(&coordinador, NULL, accionesCoordinadorSocial, NULL);
 
+
 	for(int i = 0; i < numeroAtendedores; i++){
 		pthread_join((*(atendedores+i)).tid,NULL);
 	}
 
-	pthread_cancel(coordinador);
-
-	borrarTodo();
-
-	return 0;
-}
 
 
-void borrarTodo(){
-	char buffer[120], quienHabla[50];
-
-	for(int i = 0; i < tamCola; i++){
-		if((*(cola+i)).id !=-1){
-			pthread_cancel((*(cola+i)).tid);
-		}
-	}
-
-	for(int i = 0; i < TAMACTIVIDAD; i++){
-
-		if((colaActividadSocial+i)->id !=-1){
-			pthread_cancel((colaActividadSocial+i)->tid);
-		}
-	}
-
-	pthread_mutex_lock(&escribirLog);
-	sprintf(buffer, "El coordinador ha fallecido");
-	sprintf(quienHabla,"Sistema"); 
-	writeLogMessage(quienHabla, buffer);
-	pthread_mutex_unlock(&escribirLog);
 
 	free(cola);
 	free(atendedores);
+	
+	pthread_cond_broadcast(&avisarCoordinador);
+	pthread_cond_broadcast(&candadoActividadAbierto);
+	pthread_cond_broadcast(&empezadActividad);
 
 	pthread_mutex_lock(&escribirLog);
 	sprintf(buffer, "Se ha acabado el programa\n----------------------------------------------------\n");
 	sprintf(quienHabla,"Sistema"); 
 	writeLogMessage(quienHabla, buffer);
 	pthread_mutex_unlock(&escribirLog);
+	//No hemos destruido el mutex actividadSocial ni la variable condicion avisarCoordinador, porque debido a nuestro disenyo, el coordinador 
+	//esta esperando en avisarCoordinador asociada a ese mutex a la hora de destruirlo
 
-	/*
-	pthread_cond_broadcast(&avisarCoordinador);
-	pthread_cond_broadcast(&candadoActividadAbierto);
-	pthread_mutex_unlock(&datosSolicitud);
-	pthread_mutex_unlock(&escribirLog);
-	pthread_mutex_unlock(&comprobarFin);
-	*/
+	if(pthread_cond_destroy(&empezadActividad) != 0){
+		perror("Error al destruir empezadActividad");	
+		exit(-1);
+	}
 
+	if(pthread_cond_destroy(&candadoActividadAbierto) != 0){
+		perror("Error al destruir candadoActividadAbierto");	
+		exit(-1);
+	}
+
+	if(pthread_cond_destroy(&avisarCoordinador) != 0){
+		perror("Error al destruir avisarCoordinador");	
+		exit(-1);
+	}
 	if(pthread_mutex_destroy(&datosSolicitud) != 0){
 		perror("Error al destruir datosSolicitud");	
 		exit(-1);
 	}
 
-	//No hemos destruido el mutex actividadSocial ni la variable condicion avisarCoordinador, porque debido a nuestro disenyo, el coordinador 
-	//esta esperando en avisarCoordinador asociada a ese mutex a la hora de destruirlo
-	
 	if(pthread_mutex_destroy(&escribirLog) != 0){
 		perror("Error al destruir escribirLog");	
 		exit(-1);
@@ -304,25 +282,8 @@ void borrarTodo(){
 		perror("Error al destruir comprobarFin");	
 		exit(-1);
 	}
-
-	/*
-	if(pthread_cond_destroy(&empezadActividad) != 0){
-		perror("Error al destruir empezadActividad");	
-		exit(-1);
-	}
-	*/
-
-	if(pthread_cond_destroy(&avisarCoordinador) != 0){
-		perror("Error al destruir avisarCoordinador");	
-		exit(-1);
-	}
-
-	if(pthread_cond_destroy(&candadoActividadAbierto) != 0){
-		perror("Error al destruir candadoActividadAbierto");	
-		exit(-1);
-	}
+	return 0;
 }
-
 
 
 /*
@@ -359,7 +320,6 @@ int generadorID(int tipo){
 **/
 void nuevaSolicitud(int sig){
 
-
 	int siguiente;
 	bool ignorarSenyales = false;
 	char buffer[100], quienHabla[50];
@@ -372,7 +332,6 @@ void nuevaSolicitud(int sig){
 		pthread_mutex_lock(&datosSolicitud);
 		siguiente = posicionSiguiente(SOLICITUD);
 		if(siguiente == -1){
-			printf("No se puede anyadir otra solicitud, la cola esta llena\n");
 			pthread_mutex_lock(&escribirLog);
 			sprintf(buffer, "La solicitud no ha podido entrar porque la cola estaba llena");	
 			sprintf(quienHabla,"Sistema"); 
@@ -383,9 +342,7 @@ void nuevaSolicitud(int sig){
 			(*(cola+siguiente)).id = generadorID(SOLICITUD);
 			(*(cola+siguiente)).atendido = PORATENDER;
 
-			printf("La solicitud %d tiene el flag de atendido a %d\n", (*(cola+siguiente)).id, (*(cola+siguiente)).atendido);
-
-			if(sig == SIGUSR1){ //SIGUSR1 -- Invitación
+			if(sig == SIGUSR1){ //SIGUSR1 -- invitación
 				(*(cola+siguiente)).tipo = INVITACION;
 				pthread_mutex_unlock(&datosSolicitud);
 				pthread_create(&(*(cola+siguiente)).tid, NULL, accionesSolicitud, &*(cola+siguiente));
@@ -412,29 +369,25 @@ void nuevaSolicitud(int sig){
 * LA SOLICITUD ESPERA A SER ATENDIDA Y EN FUNCION DE SI LE DEJAN ACCEDER A UNA ACTIVIDAD, LUEGO DECIDIRA SI
 * PARTICIPA EN ELLA O NO. SI DECIDE PARTICIPAR, ENTRA EN LA COLA DE LA ACTIVIDAD SOCIAL
 */
-void *accionesSolicitud(void *arg){ 
+void *accionesSolicitud(void *arg){ //Funcion que ejecutan los hilos al crearse
+
+	srand(pthread_self());
+
 
 	struct solicitud *solicitudActual; //la estructura a la que apunta el puntero que le pasamos al hilo
+	solicitudActual = (struct solicitud *) arg;
 	int siguienteActSoc;
 	char buffer[100], quienHabla[50];
 	int idActual;
 	int tipoActual;
-
-	solicitudActual = (struct solicitud *) arg;
-
-	//Para poder cancelar el hilo en cualquier momento
-	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
-
-	srand(pthread_self());
 
 	pthread_mutex_lock(&datosSolicitud);
 	idActual = solicitudActual->id;
 	tipoActual = solicitudActual->tipo;
 	pthread_mutex_unlock(&datosSolicitud);	
 
-	printf("Soy la solicitud %d y mi identificador es %ld\n", idActual, syscall(SYS_gettid));
-
 	pthread_mutex_lock(&escribirLog);
+
 	if(tipoActual == QR){
 		sprintf(buffer, "Acabo de entrar en el sistema, soy de tipo QR.");	
 	}else{
@@ -446,21 +399,19 @@ void *accionesSolicitud(void *arg){
 
 	sleep(4);
 
+	
 	pthread_mutex_lock(&datosSolicitud);
-
 	while(solicitudActual->atendido == PORATENDER){
 		if (descartar(tipoActual) == false){
 			pthread_mutex_unlock(&datosSolicitud);
 			sleep(3);
 			pthread_mutex_lock(&datosSolicitud);
 		} else {
-
 			pthread_mutex_lock(&escribirLog);
 			sprintf(buffer, "He sido descartada");	
 			sprintf(quienHabla, "Solicitud %d", idActual); 
 			writeLogMessage(quienHabla, buffer);
 			pthread_mutex_unlock(&escribirLog);
-
 			borrarDeLaCola(idActual);
 			pthread_mutex_unlock(&datosSolicitud);
 			pthread_exit(NULL);
@@ -470,14 +421,17 @@ void *accionesSolicitud(void *arg){
 
 	
 	pthread_mutex_lock(&datosSolicitud);
-	while(solicitudActual->atendido == ATENDIENDO){
+	while(solicitudActual->atendido != ATENDIDO){
 		pthread_mutex_unlock(&datosSolicitud);
 		sleep(1);
 		pthread_mutex_lock(&datosSolicitud);	
 	}
+	pthread_mutex_unlock(&datosSolicitud);
 
+
+	pthread_mutex_lock(&datosSolicitud);
 	pthread_mutex_lock(&escribirLog);
-
+	
 	
 	if(solicitudActual->tipoDatos == ANTECEDENTES){
 		sprintf(buffer, "¡¡TENGO ANTECEDENTES!!");
@@ -486,22 +440,24 @@ void *accionesSolicitud(void *arg){
 	}else{
 		sprintf(buffer, "Mis datos son correctos");
 	}
-	
+
+	writeLogMessage(quienHabla, buffer);
+	pthread_mutex_unlock(&datosSolicitud);
+
 	pthread_mutex_unlock(&escribirLog);
 
-	pthread_mutex_unlock(&datosSolicitud); //TODO unlock y lock seguidos?
 	pthread_mutex_lock(&datosSolicitud);
-
-	if(solicitudActual->tipoDatos == ANTECEDENTES){ 
-
+	if(solicitudActual->tipoDatos == ANTECEDENTES){ //Este tipo de solicitud no puede participar en actividades sociales, asi que se va pa su casa
 		pthread_mutex_lock(&escribirLog);
 		sprintf(buffer, "Como no puedo participar en ninguna actividad social, me voy.");	
 		sprintf(quienHabla, "Solicitud %d", idActual); 
 		writeLogMessage(quienHabla, buffer);
 		pthread_mutex_unlock(&escribirLog);
 
+		//Inicializamos todos los parametros de la estructura del hilo a cero
 		borrarDeLaCola(idActual);
 		pthread_mutex_unlock(&datosSolicitud);
+		//Eliminamos el hilo con el exit
 		pthread_exit(NULL);
 
 	}else if(calculaAleatorio(0, 1) == 0){ //NO QUIERE PARTICIPAR
@@ -511,9 +467,10 @@ void *accionesSolicitud(void *arg){
 		writeLogMessage(quienHabla, buffer);
 		pthread_mutex_unlock(&escribirLog);
 
+		//Inicializamos todos los parametros de la estructura del hilo a cero
 		borrarDeLaCola(idActual);
 		pthread_mutex_unlock(&datosSolicitud);
-
+		//Eliminamos el hilo con el exit
 		pthread_exit(NULL);
 
 	}else{
@@ -525,9 +482,8 @@ void *accionesSolicitud(void *arg){
 		writeLogMessage(quienHabla, buffer);
 		pthread_mutex_unlock(&escribirLog);
 
-		//Aqui la solicitud ya ha sido atendida y sabe de que tipo son sus datos, si se ha acabado el programa se autodestruye
+		//Aqui la solicitud ya ha sido atendida y sabe de que tipo son sus datos, si se ha acabado el programa sse autodestruye
 		if(fin){
-			pthread_mutex_lock(&escribirLog);
 			sprintf(buffer, "Me autodestruyo debido a que se ha dado la orden de acabar el programa.");
 			writeLogMessage(quienHabla, buffer);
 
@@ -542,11 +498,12 @@ void *accionesSolicitud(void *arg){
 
 		while(!candadoEntrarActividad){
 			pthread_cond_wait(&candadoActividadAbierto, &actividadSocial);
+			if(fin){
+				pthread_exit(NULL);
+			}
 		}
 
-		//Aqui ya puede entrar a la actividad social
 		pthread_mutex_lock(&datosSolicitud);
-
 		colaActividadSocial[contadorActividad] = *solicitudActual;
 
 		contadorActividad++;
@@ -557,9 +514,14 @@ void *accionesSolicitud(void *arg){
 		if(contadorActividad == TAMACTIVIDAD){
 			pthread_cond_signal(&avisarCoordinador);
 		}
+		
 
 		pthread_cond_wait(&empezadActividad, &actividadSocial);
+		if(fin){
+				pthread_exit(NULL);
+		}
 		
+
 		if(contadorActividad == 1){
 			sleep(3); 
 		}
@@ -570,10 +532,7 @@ void *accionesSolicitud(void *arg){
 		if(contadorActividad == 0){
 			pthread_cond_signal(&avisarCoordinador); //Avisa de que ya han salido todos de la actividad
 		}
-
 		pthread_mutex_unlock(&actividadSocial);
-
-
 	}
 
 	pthread_exit(NULL);
@@ -583,22 +542,20 @@ void *accionesSolicitud(void *arg){
 
 /** 
 * ATIENDE A LAS SOLICITUDES, LES ASIGNA SUS TIPOS DE DATOS Y DUERME 10 SEGUNDOS CADA 5 SOLICITUDES ATENDIDAS
+*
 **/
 void *accionesAtendedor(void *arg){
 
-	//TODO Ojo a acceder a campos del atendedor sin mutex cuando hagamos lo de asignacion dinamica de recursos.
 
 	srand(pthread_self());
 
-	struct atendedor *atendedorActual;
+	struct atendedor *atendedorActual = (struct atendedor *) arg;
 	int solicitudAatender;
 	int aleatorio;
 	int tiempoAtencion;
+	int idActual;
+
 	char buffer[100], quienHabla[50];
-
-	atendedorActual = (struct atendedor *) arg; 
-
-	printf("Soy el atendedor %d y mi identificador es %ld\n", atendedorActual->id, syscall(SYS_gettid));
 
 	pthread_mutex_lock(&comprobarFin);
 
@@ -616,13 +573,15 @@ void *accionesAtendedor(void *arg){
 				sleep(1);
 		}else{
 
+			idActual = cola[solicitudAatender].id;
+			pthread_mutex_unlock(&datosSolicitud);	
+
 			pthread_mutex_lock(&escribirLog);
-			sprintf(buffer, "Estoy atendiendo a la solicitud %d.", cola[solicitudAatender].id);	
+			sprintf(buffer, "Estoy atendiendo a la solicitud %d.", idActual);	
 			writeLogMessage(quienHabla, buffer);
 			pthread_mutex_unlock(&escribirLog);
 
 			aleatorio = calculaAleatorio(1,10);
-			printf("El numero aleatorio calculado es: %d\n", aleatorio);
 
 			cola[solicitudAatender].atendido = ATENDIENDO;
 
@@ -630,41 +589,29 @@ void *accionesAtendedor(void *arg){
 				(cola[solicitudAatender]).tipoDatos = ATENCIONCORRECTA;
 				tiempoAtencion = calculaAleatorio(1,4);
 
-				pthread_mutex_unlock(&datosSolicitud);
-				sleep(tiempoAtencion);
-				
-				pthread_mutex_lock(&escribirLog);
-				sprintf(buffer, "Ya he acabado de atender a la solicitud %d, que tiene todo en regla.", cola[solicitudAatender].id);	
-				writeLogMessage(quienHabla, buffer);
-				pthread_mutex_unlock(&escribirLog);
+				sprintf(buffer, "Ya he acabado de atender a la solicitud %d, que tiene todo en regla.", idActual);
+
 
 			}else if(aleatorio <= 9){
 				(cola[solicitudAatender]).tipoDatos = ERRORESDATOS;
 				tiempoAtencion = calculaAleatorio(2,6);
-				
-				pthread_mutex_unlock(&datosSolicitud);
-				sleep(tiempoAtencion);
 
-				pthread_mutex_lock(&escribirLog);
-				sprintf(buffer, "Ya he acabado de atender a la solicitud %d, que tiene errores en sus datos.", cola[solicitudAatender].id);	
-				writeLogMessage(quienHabla, buffer);
-				pthread_mutex_unlock(&escribirLog);
-
-				
+				sprintf(buffer, "Ya he acabado de atender a la solicitud %d, que tiene errores en sus datos.", idActual);	
 
 			}else{
 				(cola[solicitudAatender]).tipoDatos = ANTECEDENTES;
 				tiempoAtencion = calculaAleatorio(6,10);
-
-				pthread_mutex_unlock(&datosSolicitud);
-				sleep(tiempoAtencion);
-			
-				pthread_mutex_lock(&escribirLog);
-				sprintf(buffer, "Ya he acabado de atender a la solicitud %d, que tiene antecedentes.", cola[solicitudAatender].id);	
-				writeLogMessage(quienHabla, buffer);
-				pthread_mutex_unlock(&escribirLog);
+				
+				sprintf(buffer, "Ya he acabado de atender a la solicitud %d, que tiene antecedentes.", idActual);
+				
 
 			}
+
+			sleep(tiempoAtencion);
+
+			pthread_mutex_lock(&escribirLog);
+			writeLogMessage(quienHabla, buffer);
+			pthread_mutex_unlock(&escribirLog);
 
 			pthread_mutex_lock(&datosSolicitud);
 
@@ -672,9 +619,9 @@ void *accionesAtendedor(void *arg){
 
 			pthread_mutex_unlock(&datosSolicitud);
 
-
-			//TODO ojo cuando hagamos asignacion dinamica
 			atendedorActual->numSolicitudes++;
+
+
 
 			if((atendedorActual->numSolicitudes % 5 == 0) && (atendedorActual->numSolicitudes!=0)){
 				pthread_mutex_lock(&escribirLog);
@@ -706,18 +653,12 @@ void *accionesAtendedor(void *arg){
 
 
 /** 
-* ESPERA A QUE ENTREN 4 SOLICITUDES A LA ACTIVIDAD, AVISA DEL COMIENZO Y ESPERA A QUE FINALICEN
+*  ESPERA A QUE ENTREN 4 SOLICITUDES A LA ACTIVIDAD, AVISA DEL COMIENZO Y ESPERA A QUE FINALICEN
 *
 **/
 void *accionesCoordinadorSocial(void *arg){
-
-	//Para que se pueda cancelar el hilo en cualquier momento
-	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
-
+	
 	char buffer[50], quienHabla[50];
-
-	printf("Soy el coordinador y mi identificador es %ld\n", syscall(SYS_gettid));
-
 	pthread_mutex_lock(&comprobarFin);
 	while(fin == false){
 		pthread_mutex_unlock(&comprobarFin);
@@ -726,8 +667,10 @@ void *accionesCoordinadorSocial(void *arg){
 		pthread_mutex_lock(&actividadSocial);
 
 		pthread_cond_wait(&avisarCoordinador, &actividadSocial);
+		if(fin){
+				pthread_exit(NULL);
+			}
 		candadoEntrarActividad = false;
-
 
 		pthread_cond_broadcast(&empezadActividad);
 
@@ -739,6 +682,10 @@ void *accionesCoordinadorSocial(void *arg){
 
 
 		pthread_cond_wait(&avisarCoordinador, &actividadSocial);
+		if(fin){
+				pthread_exit(NULL);
+
+			}
 
 		pthread_mutex_lock(&escribirLog);
 		sprintf(buffer, "La actividad ha finalizado");	
@@ -758,6 +705,7 @@ void *accionesCoordinadorSocial(void *arg){
 	}
 
 	pthread_mutex_unlock(&comprobarFin);
+
 
 }
 
@@ -803,7 +751,6 @@ void finPrograma(int sig){
 	pthread_mutex_lock(&comprobarFin);
 	if(fin){
 		pthread_mutex_unlock(&comprobarFin);
-		printf("Ya se esta trabajando en finalizar el programa");
 		pthread_mutex_lock(&escribirLog);
 		sprintf(buffer, "Ya se esta trabajando en finalizar el programa.");
 		sprintf(quienHabla, "Sistema"); 
@@ -817,11 +764,11 @@ void finPrograma(int sig){
 		pthread_mutex_lock(&escribirLog);
 		writeLogMessage(quienHabla, buffer);
 		pthread_mutex_unlock(&escribirLog);
+		
 	}
 	
 	
 }
-
 
 /**
 * PONE EL ID PASADO COMO ARGUMENTO DE LA COLA DE LA ACTIVIDAD A -1, PARA INDICAR QUE SE HA ELIMINADO
@@ -840,6 +787,7 @@ void borrarColaActividad(int id){
 	}
 }
 
+
 /**
 * PONE EL ID PASADO COMO ARGUMENTO A -1 EN LA COLA DE SOLICITUDES Y LLAMA A COMPACTAR
 **/
@@ -857,6 +805,7 @@ void borrarDeLaCola(int id){
 	}
 	compactar(i);
 }
+
 
 /**
 * ELIMINA LAS POSICIONES VACIAS QUE PUEDA HABER POR EL MEDIO DE LA COLA Y LAS SITUA AL FINAL
@@ -877,9 +826,7 @@ void compactar(int posicionVacia){
 		}
 }
 
-/**
-* 
-**/
+
 int posicionSiguiente(int tipoCola){
 
 	int i;
@@ -1015,7 +962,6 @@ bool estanTodosAtendidos(){
 
 	pthread_mutex_unlock(&datosSolicitud);
 
-	//printf("La funcion estan todos atendidos devuelve %d\n", !algunoSinAtender);
 	return !algunoSinAtender;
 }
 
@@ -1032,11 +978,7 @@ void aumentarNumSolicitudes(int sig){
     	printf("Ya se está acabando el programa, no se puede modificar\n");
     }else{
 
-    	do{
-    		printf("Introduzca el numero de solicitudes que desea que existan en el sistema: \n");
-    		printf("(Debe ser mayor que %d)\n", tamCola);
-		    scanf("%d",&numSolicitudes);
-    	}while(numSolicitudes<=tamCola);
+    	
 		    
 	 
 	    //TODO hacemos muchos locks o que hacemos?
@@ -1045,7 +987,13 @@ void aumentarNumSolicitudes(int sig){
 	    pthread_mutex_lock(&actividadSocial);
 	    pthread_mutex_lock(&escribirLog);
 
-	 
+	 	do{
+    		printf("Introduzca el numero de solicitudes que desea que existan en el sistema: \n");
+    		printf("(Debe ser mayor que %d)\n", tamCola);
+		    scanf("%d",&numSolicitudes);
+    	}while(numSolicitudes<=tamCola);
+
+    	
 	    cola = (struct solicitud *)realloc(cola, numSolicitudes*sizeof(struct solicitud *));
 	    for(int i=tamCola; i<numSolicitudes; i++){
 	    	cola[i].id = -1;
@@ -1077,16 +1025,16 @@ void aumentarNumAtendedores(int sig){
     	printf("Ya se está acabando el programa, no se puede modificar\n");
     }else{
 
-    	do{
-		    printf("Introduzca el numero de atendedores que desea que existan en el sistema: \n");
-		    printf("(Debe ser mayor que %d)\n", numeroAtendedores);
-		    scanf("%d",&numNuevosAtendedores);
-		}while(numNuevosAtendedores<=numeroAtendedores);
+    	
 
 	    pthread_mutex_lock(&datosSolicitud);
 	    pthread_mutex_lock(&actividadSocial);
 	    pthread_mutex_lock(&escribirLog);
-
+	    do{
+		    printf("Introduzca el numero de atendedores que desea que existan en el sistema: \n");
+		    printf("(Debe ser mayor que %d)\n", numeroAtendedores);
+		    scanf("%d",&numNuevosAtendedores);
+		}while(numNuevosAtendedores<=numeroAtendedores);
 	 
 		atendedores = (struct atendedor *)realloc(atendedores, numNuevosAtendedores*sizeof(struct atendedor *));
 
