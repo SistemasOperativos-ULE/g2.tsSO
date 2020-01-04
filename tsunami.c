@@ -21,6 +21,8 @@
 //senyales
 #include <signal.h>
 
+#include <sys/syscall.h>
+
 #define QR 0 //Usuarios que intentan acceder por QR
 #define INVITACION 1 //Usuarios que intentan acceder por invitacion
 #define PRO 3
@@ -110,7 +112,7 @@ void borrarColaActividad(int id);
 bool estanTodosAtendidos();
 void aumentarNumAtendedores(int sig);
 void aumentarNumSolicitudes(int sig);
-
+void borrarTodo();
 
 
 /** 
@@ -240,6 +242,15 @@ int main(int argc, char *argv[]){
 
 	pthread_cancel(coordinador);
 
+	borrarTodo();
+
+	return 0;
+}
+
+
+void borrarTodo(){
+	char buffer[120], quienHabla[50];
+
 	for(int i = 0; i < tamCola; i++){
 		if((*(cola+i)).id !=-1){
 			pthread_cancel((*(cola+i)).tid);
@@ -252,8 +263,6 @@ int main(int argc, char *argv[]){
 			pthread_cancel((colaActividadSocial+i)->tid);
 		}
 	}
-
-	pthread_cancel(coordinador);
 
 	pthread_mutex_lock(&escribirLog);
 	sprintf(buffer, "El coordinador ha fallecido");
@@ -269,7 +278,14 @@ int main(int argc, char *argv[]){
 	sprintf(quienHabla,"Sistema"); 
 	writeLogMessage(quienHabla, buffer);
 	pthread_mutex_unlock(&escribirLog);
-	
+
+	/*
+	pthread_cond_broadcast(&avisarCoordinador);
+	pthread_cond_broadcast(&candadoActividadAbierto);
+	pthread_mutex_unlock(&datosSolicitud);
+	pthread_mutex_unlock(&escribirLog);
+	pthread_mutex_unlock(&comprobarFin);
+	*/
 
 	if(pthread_mutex_destroy(&datosSolicitud) != 0){
 		perror("Error al destruir datosSolicitud");	
@@ -278,7 +294,7 @@ int main(int argc, char *argv[]){
 
 	//No hemos destruido el mutex actividadSocial ni la variable condicion avisarCoordinador, porque debido a nuestro disenyo, el coordinador 
 	//esta esperando en avisarCoordinador asociada a ese mutex a la hora de destruirlo
-
+	
 	if(pthread_mutex_destroy(&escribirLog) != 0){
 		perror("Error al destruir escribirLog");	
 		exit(-1);
@@ -289,8 +305,15 @@ int main(int argc, char *argv[]){
 		exit(-1);
 	}
 
+	/*
 	if(pthread_cond_destroy(&empezadActividad) != 0){
 		perror("Error al destruir empezadActividad");	
+		exit(-1);
+	}
+	*/
+
+	if(pthread_cond_destroy(&avisarCoordinador) != 0){
+		perror("Error al destruir avisarCoordinador");	
 		exit(-1);
 	}
 
@@ -298,9 +321,8 @@ int main(int argc, char *argv[]){
 		perror("Error al destruir candadoActividadAbierto");	
 		exit(-1);
 	}
-
-	return 0;
 }
+
 
 
 /*
@@ -409,6 +431,8 @@ void *accionesSolicitud(void *arg){
 	idActual = solicitudActual->id;
 	tipoActual = solicitudActual->tipo;
 	pthread_mutex_unlock(&datosSolicitud);	
+
+	printf("Soy la solicitud %d y mi identificador es %ld\n", idActual, syscall(SYS_gettid));
 
 	pthread_mutex_lock(&escribirLog);
 	if(tipoActual == QR){
@@ -574,6 +598,8 @@ void *accionesAtendedor(void *arg){
 
 	atendedorActual = (struct atendedor *) arg; 
 
+	printf("Soy el atendedor %d y mi identificador es %ld\n", atendedorActual->id, syscall(SYS_gettid));
+
 	pthread_mutex_lock(&comprobarFin);
 
 	sprintf(quienHabla, "Atendedor %d", atendedorActual->id);
@@ -603,6 +629,9 @@ void *accionesAtendedor(void *arg){
 			if(aleatorio <= 7){
 				(cola[solicitudAatender]).tipoDatos = ATENCIONCORRECTA;
 				tiempoAtencion = calculaAleatorio(1,4);
+
+				pthread_mutex_unlock(&datosSolicitud);
+				sleep(tiempoAtencion);
 				
 				pthread_mutex_lock(&escribirLog);
 				sprintf(buffer, "Ya he acabado de atender a la solicitud %d, que tiene todo en regla.", cola[solicitudAatender].id);	
@@ -612,15 +641,23 @@ void *accionesAtendedor(void *arg){
 			}else if(aleatorio <= 9){
 				(cola[solicitudAatender]).tipoDatos = ERRORESDATOS;
 				tiempoAtencion = calculaAleatorio(2,6);
-			
+				
+				pthread_mutex_unlock(&datosSolicitud);
+				sleep(tiempoAtencion);
+
 				pthread_mutex_lock(&escribirLog);
 				sprintf(buffer, "Ya he acabado de atender a la solicitud %d, que tiene errores en sus datos.", cola[solicitudAatender].id);	
 				writeLogMessage(quienHabla, buffer);
 				pthread_mutex_unlock(&escribirLog);
 
+				
+
 			}else{
 				(cola[solicitudAatender]).tipoDatos = ANTECEDENTES;
 				tiempoAtencion = calculaAleatorio(6,10);
+
+				pthread_mutex_unlock(&datosSolicitud);
+				sleep(tiempoAtencion);
 			
 				pthread_mutex_lock(&escribirLog);
 				sprintf(buffer, "Ya he acabado de atender a la solicitud %d, que tiene antecedentes.", cola[solicitudAatender].id);	
@@ -629,11 +666,12 @@ void *accionesAtendedor(void *arg){
 
 			}
 
-			pthread_mutex_unlock(&datosSolicitud);
-
-			sleep(tiempoAtencion);
+			pthread_mutex_lock(&datosSolicitud);
 
 			cola[solicitudAatender].atendido = ATENDIDO;
+
+			pthread_mutex_unlock(&datosSolicitud);
+
 
 			//TODO ojo cuando hagamos asignacion dinamica
 			atendedorActual->numSolicitudes++;
@@ -678,6 +716,7 @@ void *accionesCoordinadorSocial(void *arg){
 
 	char buffer[50], quienHabla[50];
 
+	printf("Soy el coordinador y mi identificador es %ld\n", syscall(SYS_gettid));
 
 	pthread_mutex_lock(&comprobarFin);
 	while(fin == false){
@@ -782,6 +821,7 @@ void finPrograma(int sig){
 	
 	
 }
+
 
 /**
 * PONE EL ID PASADO COMO ARGUMENTO DE LA COLA DE LA ACTIVIDAD A -1, PARA INDICAR QUE SE HA ELIMINADO
@@ -975,6 +1015,7 @@ bool estanTodosAtendidos(){
 
 	pthread_mutex_unlock(&datosSolicitud);
 
+	//printf("La funcion estan todos atendidos devuelve %d\n", !algunoSinAtender);
 	return !algunoSinAtender;
 }
 
