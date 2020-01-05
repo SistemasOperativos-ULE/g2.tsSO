@@ -133,7 +133,6 @@ int main(int argc, char *argv[]){
 		exit(-1);
 	}
 
-	//TODO mejorar la aceptacion de letras y numeros negativos
 	if(argc==2){
 		tamCola = atoi(argv[1]);
 		numeroAtendedores = 3;	
@@ -142,6 +141,14 @@ int main(int argc, char *argv[]){
 		numeroAtendedores = atoi(argv[2])+2;
 	}else{
 		tamCola = TAMCOLADEFECTO;
+		numeroAtendedores = 3;
+	}
+
+	if(tamCola<=0){
+		tamCola = TAMCOLADEFECTO;
+	}
+
+	if(numeroAtendedores<=3){
 		numeroAtendedores = 3;
 	}
 
