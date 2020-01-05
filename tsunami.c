@@ -1021,12 +1021,12 @@ void aumentarNumAtendedores(int sig){
 
     	int i = antiguosAtendedores;
 
-    	for(int i = antiguosAtendedores; i<numeroAtendedores+1; i++){
+    	for(int i = antiguosAtendedores; i<=numNuevosAtendedores; i++){
     		atendedores[i].id = -1;
     		i++;
     	}
 
-    	atendedores[4].id = -1;
+    	//atendedores[4].id = -1;
 
     	for(int i=0; i<numeroAtendedores; i++){
 			printf("El id del atendedor %d ahora es %d\n", i, (atendedores+i)->id);
