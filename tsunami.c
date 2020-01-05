@@ -154,6 +154,7 @@ int main(int argc, char *argv[]){
 		exit(-1);
 	}
 
+	//todo, mejorar la acepcion de letras y numeros negativos
 	if(argc==2){
 		tamCola = atoi(argv[1]);
 		numeroAtendedores = 3;	
@@ -213,7 +214,7 @@ int main(int argc, char *argv[]){
 	atendedores = (struct atendedor *)malloc(sizeof(struct atendedor)*(numeroAtendedores));
 
 	//Inicializacion de la identificacion de las estructuras para poder buscar la posicionSiguiente de la cola
-	for(int i = 0; i < TAMCOLADEFECTO; i++){
+	for(int i = 0; i < tamCola; i++){
 		cola[i].id = -1;
 	}
 
@@ -231,16 +232,21 @@ int main(int argc, char *argv[]){
 
 	pthread_create(&coordinador, NULL, accionesCoordinadorSocial, NULL);
 
+	while(!fin){
+		sleep(1);
+	}
 
+	/*printf("Iniciando el join\n");
 	for(int i = 0; i < numeroAtendedores; i++){
 		pthread_join((*(atendedores+i)).tid,NULL);
 	}
+	printf("Acabando el join\n");*/
 
 
 
 
-	free(cola);
-	free(atendedores);
+	/*free(cola);
+	free(atendedores);*/
 	
 	pthread_cond_broadcast(&avisarCoordinador);
 	pthread_cond_broadcast(&candadoActividadAbierto);
@@ -291,13 +297,15 @@ int main(int argc, char *argv[]){
 */
 void nuevoAtendedor(int tipo){
 
-	int siguiente;
-	siguiente = posicionSiguiente(ATENDEDOR);
+	printf("Metodo nuevo atendedor\n");
+	int siguiente = posicionSiguiente(ATENDEDOR);
+	printf("Siguiente = %d\n", siguiente);
 
 	(*(atendedores+siguiente)).id = generadorID(ATENDEDOR);
 	(*(atendedores+siguiente)).tipo = tipo;
 	(*(atendedores+siguiente)).numSolicitudes = 0;
 	pthread_create(&(*(atendedores+siguiente)).tid, NULL, accionesAtendedor, &*(atendedores+siguiente));
+	printf("Creado hilo de atendedor %d en la posicion %d\n", tipo, siguiente);
 }
 
 
@@ -978,9 +986,6 @@ void aumentarNumSolicitudes(int sig){
     	printf("Ya se está acabando el programa, no se puede modificar\n");
     }else{
 
-    	
-		    
-	 
 	    //TODO hacemos muchos locks o que hacemos?
 
 	    pthread_mutex_lock(&datosSolicitud);
@@ -995,6 +1000,7 @@ void aumentarNumSolicitudes(int sig){
 
     	
 	    cola = (struct solicitud *)realloc(cola, numSolicitudes*sizeof(struct solicitud *));
+
 	    for(int i=tamCola; i<numSolicitudes; i++){
 	    	cola[i].id = -1;
 	    }
@@ -1005,11 +1011,9 @@ void aumentarNumSolicitudes(int sig){
 	    pthread_mutex_unlock(&actividadSocial);
 	    pthread_mutex_unlock(&escribirLog);
 
-
 	}
 
     pthread_mutex_unlock(&comprobarFin);
-    
 }
  
  
@@ -1025,24 +1029,42 @@ void aumentarNumAtendedores(int sig){
     	printf("Ya se está acabando el programa, no se puede modificar\n");
     }else{
 
-    	
-
 	    pthread_mutex_lock(&datosSolicitud);
 	    pthread_mutex_lock(&actividadSocial);
 	    pthread_mutex_lock(&escribirLog);
+
 	    do{
 		    printf("Introduzca el numero de atendedores que desea que existan en el sistema: \n");
 		    printf("(Debe ser mayor que %d)\n", numeroAtendedores);
 		    scanf("%d",&numNuevosAtendedores);
 		}while(numNuevosAtendedores<=numeroAtendedores);
-	 
-		atendedores = (struct atendedor *)realloc(atendedores, numNuevosAtendedores*sizeof(struct atendedor *));
 
+		printf("Saliendo del while de pregunta. Resultado = %d\n", numNuevosAtendedores);
+	 
+		atendedores = (struct atendedor *)realloc(atendedores, (numNuevosAtendedores)*sizeof(struct atendedor *));
+
+		printf("Hecho el realloc\n");
+
+		//numeroAtendedores = numNuevosAtendedores;
+		int antiguosAtendedores = numeroAtendedores;
 		numeroAtendedores = numNuevosAtendedores;
 
-		for(int i = numeroAtendedores; i < numNuevosAtendedores; i++){
-        	nuevoAtendedor(PRO);
+		printf("Seteado el numero de Atendedores nuevo	\n");
+
+    	int i= antiguosAtendedores;
+    	while(i<numeroAtendedores){
+    		atendedores[i].id = -1;
+    		i++;
     	}
+
+    	i= antiguosAtendedores;
+    	while(i<numeroAtendedores){
+    		printf("Creado otro atendedor tipo PRO (%d)\n", i);
+    		nuevoAtendedor(PRO);
+    		i++;
+    	}
+
+    	printf("Fin del for	\n");
 
 	    pthread_mutex_unlock(&datosSolicitud);
 	    pthread_mutex_unlock(&actividadSocial);
