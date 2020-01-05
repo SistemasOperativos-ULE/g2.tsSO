@@ -37,10 +37,11 @@
 #define TAMACTIVIDAD 4
 
 
+#define ARRAY_SIZE(x) (sizeof((x)) / sizeof((x)[0])) //TODO eliminar
+
+
 /**
 * DECLARACIONES GLOBALES
-*
-*
 **/
 
 struct solicitud{
@@ -48,12 +49,11 @@ struct solicitud{
 	int tipo; //INVITACION = 1; QR = 0
 	int atendido; //posicion 0 sin atender, 1 siendo atendido, 2 ya ha sido atendido
 	pthread_t tid;
-	int tipoDatos; //Atencion correcta, errores en los datos o antecedentes policiales
+	int tipoDatos; //Atencion correcta(1), errores en los datos(2) o antecedentes(3)
 };
 
 int idSolicitud;
 
-//Inicialmente se pone al tamanio por defecto, puede que haya que cambiarlo en la parte extra de la practica (modificacion dinamica)
 int tamCola;
 
 pthread_mutex_t datosSolicitud, actividadSocial, escribirLog, comprobarFin;
@@ -70,16 +70,16 @@ struct atendedor{
 int idAtendedor;
 
 struct atendedor *atendedores; //Punteros para que se pueda modificar el numero de atendedores dinamicamente
+
 int numeroAtendedores;
-//Contador de solicitudes
-struct solicitud *cola; //El tamanyo en principio es 15, pero puede variar
+
+struct solicitud *cola;
 
 struct solicitud colaActividadSocial[TAMACTIVIDAD];
 
 int contadorActividad;
 
 bool candadoEntrarActividad;
-
 
 FILE *registroTiempos;
 
@@ -107,7 +107,7 @@ void borrarColaActividad(int id);
 bool estanTodosAtendidos();
 void aumentarNumAtendedores(int sig);
 void aumentarNumSolicitudes(int sig);
-
+void borrarTodo();
 
 //Se usa la notacion EM para zonas de exclusion mutua y VC para zonas en las que se deben usar variables condicion
 
@@ -120,6 +120,7 @@ int main(int argc, char *argv[]){
 	struct sigaction sLlegaSolicitud, sPrepararFin, sFinalizar, sAumentarSolicitudes, sAumentarAtendedores;
 	pthread_t coordinador;
 	char buffer[100], quienHabla[50];
+
 	sLlegaSolicitud.sa_handler = nuevaSolicitud;
 
 	if(sigaction(SIGUSR1, &sLlegaSolicitud, NULL) == -1){
@@ -154,7 +155,7 @@ int main(int argc, char *argv[]){
 		exit(-1);
 	}
 
-	//todo, mejorar la acepcion de letras y numeros negativos
+	//TODO mejorar la aceptacion de letras y numeros negativos
 	if(argc==2){
 		tamCola = atoi(argv[1]);
 		numeroAtendedores = 3;	
@@ -232,62 +233,18 @@ int main(int argc, char *argv[]){
 
 	pthread_create(&coordinador, NULL, accionesCoordinadorSocial, NULL);
 
-	while(!fin){
+	/*while(!fin){
 		sleep(1);
-	}
+	}*/
 
-	/*printf("Iniciando el join\n");
+	printf("Iniciando el join\n");
 	for(int i = 0; i < numeroAtendedores; i++){
 		pthread_join((*(atendedores+i)).tid,NULL);
 	}
-	printf("Acabando el join\n");*/
+	printf("Acabando el join\n");
 
+	borrarTodo();
 
-
-
-	/*free(cola);
-	free(atendedores);*/
-	
-	pthread_cond_broadcast(&avisarCoordinador);
-	pthread_cond_broadcast(&candadoActividadAbierto);
-	pthread_cond_broadcast(&empezadActividad);
-
-	pthread_mutex_lock(&escribirLog);
-	sprintf(buffer, "Se ha acabado el programa\n----------------------------------------------------\n");
-	sprintf(quienHabla,"Sistema"); 
-	writeLogMessage(quienHabla, buffer);
-	pthread_mutex_unlock(&escribirLog);
-	//No hemos destruido el mutex actividadSocial ni la variable condicion avisarCoordinador, porque debido a nuestro disenyo, el coordinador 
-	//esta esperando en avisarCoordinador asociada a ese mutex a la hora de destruirlo
-
-	if(pthread_cond_destroy(&empezadActividad) != 0){
-		perror("Error al destruir empezadActividad");	
-		exit(-1);
-	}
-
-	if(pthread_cond_destroy(&candadoActividadAbierto) != 0){
-		perror("Error al destruir candadoActividadAbierto");	
-		exit(-1);
-	}
-
-	if(pthread_cond_destroy(&avisarCoordinador) != 0){
-		perror("Error al destruir avisarCoordinador");	
-		exit(-1);
-	}
-	if(pthread_mutex_destroy(&datosSolicitud) != 0){
-		perror("Error al destruir datosSolicitud");	
-		exit(-1);
-	}
-
-	if(pthread_mutex_destroy(&escribirLog) != 0){
-		perror("Error al destruir escribirLog");	
-		exit(-1);
-	}
-
-	if(pthread_mutex_destroy(&comprobarFin) != 0){
-		perror("Error al destruir comprobarFin");	
-		exit(-1);
-	}
 	return 0;
 }
 
@@ -301,12 +258,21 @@ void nuevoAtendedor(int tipo){
 	int siguiente = posicionSiguiente(ATENDEDOR);
 	printf("Siguiente = %d\n", siguiente);
 
-	(*(atendedores+siguiente)).id = generadorID(ATENDEDOR);
-	(*(atendedores+siguiente)).tipo = tipo;
-	(*(atendedores+siguiente)).numSolicitudes = 0;
-	pthread_create(&(*(atendedores+siguiente)).tid, NULL, accionesAtendedor, &*(atendedores+siguiente));
-	printf("Creado hilo de atendedor %d en la posicion %d\n", tipo, siguiente);
+	if(siguiente == -1){
+		printf("No se puede anyadir otro atendedor\n");
+	}else{
+		(*(atendedores+siguiente)).id = generadorID(ATENDEDOR);
+		(*(atendedores+siguiente)).tipo = tipo;
+		(*(atendedores+siguiente)).numSolicitudes = 0;
+		pthread_create(&(*(atendedores+siguiente)).tid, NULL, accionesAtendedor, &*(atendedores+siguiente));
+		printf("Creado hilo de atendedor %d en la posicion %d\n", tipo, siguiente);
+	}
+
+
 }
+
+
+
 
 
 /*
@@ -1016,7 +982,7 @@ void aumentarNumSolicitudes(int sig){
     pthread_mutex_unlock(&comprobarFin);
 }
  
- 
+
 /*
 *  INTRODUCE EN EL PROGRAMA EL NUMERO DE ATENDEDORES PRO DESEADOS POR EL USUARIO
 */
@@ -1041,27 +1007,34 @@ void aumentarNumAtendedores(int sig){
 
 		printf("Saliendo del while de pregunta. Resultado = %d\n", numNuevosAtendedores);
 	 
-		atendedores = (struct atendedor *)realloc(atendedores, (numNuevosAtendedores)*sizeof(struct atendedor *));
+		atendedores = (struct atendedor *)realloc(atendedores, (numNuevosAtendedores)*sizeof(struct atendedor *)); //TODO al ponerle mas espacio al puntero pone bien el id de los atendedores a -1 pero sigue dando errores
 
-		printf("Hecho el realloc\n");
+		for(int i=0; i<numeroAtendedores; i++){
+			printf("El id del antiguo atendedor %d es %d\n", i, (atendedores+i)->id);
+		}
 
-		//numeroAtendedores = numNuevosAtendedores;
-		int antiguosAtendedores = numeroAtendedores;
+
+ 		int antiguosAtendedores = numeroAtendedores;
 		numeroAtendedores = numNuevosAtendedores;
 
 		printf("Seteado el numero de Atendedores nuevo	\n");
 
-    	int i= antiguosAtendedores;
-    	while(i<numeroAtendedores){
+    	int i = antiguosAtendedores;
+
+    	for(int i = antiguosAtendedores; i<numeroAtendedores+1; i++){
     		atendedores[i].id = -1;
     		i++;
     	}
 
-    	i= antiguosAtendedores;
-    	while(i<numeroAtendedores){
+    	atendedores[4].id = -1;
+
+    	for(int i=0; i<numeroAtendedores; i++){
+			printf("El id del atendedor %d ahora es %d\n", i, (atendedores+i)->id);
+		}
+
+    	for(int i = antiguosAtendedores; i<numeroAtendedores; i++){
     		printf("Creado otro atendedor tipo PRO (%d)\n", i);
     		nuevoAtendedor(PRO);
-    		i++;
     	}
 
     	printf("Fin del for	\n");
@@ -1075,4 +1048,80 @@ void aumentarNumAtendedores(int sig){
 
     pthread_mutex_unlock(&comprobarFin);
 
+}
+
+void borrarTodo(){
+	char buffer[120], quienHabla[50];
+
+	//TODO este cancel esta bien?
+	for(int i = 0; i < tamCola; i++){
+		if((*(cola+i)).id !=-1){
+			pthread_cancel((*(cola+i)).tid);
+		}
+	}
+
+	for(int i = 0; i < TAMACTIVIDAD; i++){
+
+		if((colaActividadSocial+i)->id !=-1){
+			pthread_cancel((colaActividadSocial+i)->tid);
+		}
+	}
+
+	pthread_mutex_lock(&escribirLog);
+	sprintf(buffer, "El coordinador ha fallecido");
+	sprintf(quienHabla,"Sistema"); 
+	writeLogMessage(quienHabla, buffer);
+	pthread_mutex_unlock(&escribirLog);
+
+	free(cola);
+	free(atendedores);
+
+	pthread_mutex_lock(&escribirLog);
+	sprintf(buffer, "Se ha acabado el programa\n----------------------------------------------------\n");
+	sprintf(quienHabla,"Sistema"); 
+	writeLogMessage(quienHabla, buffer);
+	pthread_mutex_unlock(&escribirLog);
+
+	//TODO por que broadcasts comentados? por que sigue habiendo unlocks aqui? NO DEBERIA HABERLOS
+	pthread_cond_broadcast(&avisarCoordinador);
+	pthread_cond_broadcast(&candadoActividadAbierto);
+	/*pthread_mutex_unlock(&datosSolicitud);
+	pthread_mutex_unlock(&escribirLog);
+	pthread_mutex_unlock(&comprobarFin);
+	*/
+
+	if(pthread_mutex_destroy(&datosSolicitud) != 0){
+		perror("Error al destruir datosSolicitud");	
+		exit(-1);
+	}
+
+	//No hemos destruido el mutex actividadSocial ni la variable condicion avisarCoordinador, porque debido a nuestro disenyo, el coordinador 
+	//esta esperando en avisarCoordinador asociada a ese mutex a la hora de destruirlo
+	
+	if(pthread_mutex_destroy(&escribirLog) != 0){
+		perror("Error al destruir escribirLog");	
+		exit(-1);
+	}
+
+	if(pthread_mutex_destroy(&comprobarFin) != 0){
+		perror("Error al destruir comprobarFin");	
+		exit(-1);
+	}
+
+	/*
+	if(pthread_cond_destroy(&empezadActividad) != 0){
+		perror("Error al destruir empezadActividad");	
+		exit(-1);
+	}
+	*/
+
+	if(pthread_cond_destroy(&avisarCoordinador) != 0){
+		perror("Error al destruir avisarCoordinador");	
+		exit(-1);
+	}
+
+	if(pthread_cond_destroy(&candadoActividadAbierto) != 0){
+		perror("Error al destruir candadoActividadAbierto");	
+		exit(-1);
+	}
 }
