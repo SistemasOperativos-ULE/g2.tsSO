@@ -53,4 +53,4 @@ D - Implementada la solucion propuesta por Angel y adaptada para las solicitudes
 AB - Arreglado error por el que no funcionaba del todo bien la asignacion dinamica.
 * - Retocados detalles de printf que faltaban y aniadidos los ultimos logs de la practica.
 TODO - Acabar de actualizar la wiki
-TODO - Realizar un diagrama de gant
+B - Realizar un diagrama de gant
