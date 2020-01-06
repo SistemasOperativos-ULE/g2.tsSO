@@ -550,8 +550,7 @@ void *accionesAtendedor(void *arg){
 		}else{
 
 			idActual = cola[solicitudAatender].id;
-			cola[solicitudAatender].atendido = ATENDIENDO;
-			pthread_mutex_unlock(&datosSolicitud);	
+			cola[solicitudAatender].atendido = ATENDIENDO;	
 
 			pthread_mutex_lock(&escribirLog);
 			sprintf(buffer, "Estoy atendiendo a la solicitud %d.", idActual);	
@@ -560,7 +559,6 @@ void *accionesAtendedor(void *arg){
 
 			aleatorio = calculaAleatorio(1,10);
 
-			
 
 			if(aleatorio <= 7){
 				(cola[solicitudAatender]).tipoDatos = ATENCIONCORRECTA;
@@ -580,9 +578,9 @@ void *accionesAtendedor(void *arg){
 				tiempoAtencion = calculaAleatorio(6,10);
 				
 				sprintf(buffer, "Ya he acabado de atender a la solicitud %d, que tiene antecedentes.", idActual);
-				
-
+		
 			}
+			pthread_mutex_unlock(&datosSolicitud);
 
 			sleep(tiempoAtencion);
 
@@ -597,7 +595,6 @@ void *accionesAtendedor(void *arg){
 			pthread_mutex_unlock(&datosSolicitud);
 
 			atendedorActual->numSolicitudes++;
-
 
 
 			if((atendedorActual->numSolicitudes % 5 == 0) && (atendedorActual->numSolicitudes!=0)){
@@ -990,13 +987,6 @@ void borrarTodo(){
 		perror("Error al destruir comprobarFin");	
 		exit(-1);
 	}
-
-	/*
-	if(pthread_cond_destroy(&empezadActividad) != 0){
-		perror("Error al destruir empezadActividad");	
-		exit(-1);
-	}
-	*/
 
 	if(pthread_cond_destroy(&avisarCoordinador) != 0){
 		perror("Error al destruir avisarCoordinador");	
