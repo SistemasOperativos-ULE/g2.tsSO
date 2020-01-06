@@ -113,7 +113,7 @@ int main(int argc, char *argv[]){
 
 	struct sigaction sLlegaSolicitud, sPrepararFin, sFinalizar, sAumentarSolicitudes, sAumentarAtendedores;
 	pthread_t coordinador;
-	char buffer[100], quienHabla[50];
+	char buffer[150], quienHabla[50];
 
 	sLlegaSolicitud.sa_handler = nuevaSolicitud;
 
@@ -149,15 +149,29 @@ int main(int argc, char *argv[]){
 		exit(-1);
 	}
 
+	sprintf(quienHabla,"Sistema"); 
+
 	if(argc==2){
 		tamCola = atoi(argv[1]);
+		pthread_mutex_lock(&escribirLog);
+		sprintf(buffer, "Se ha asignado que la cola pueda albergar hasta %d solicitudes.", tamCola);
+		writeLogMessage(quienHabla,buffer);
+		pthread_mutex_unlock(&escribirLog);
 		numeroAtendedores = 3;	
 	}else if(argc==3){
 		tamCola = atoi(argv[1]);
 		numeroAtendedores = atoi(argv[2])+2;
+		pthread_mutex_lock(&escribirLog);
+		sprintf(buffer, "Se ha asignado que la cola pueda albergar hasta %d solicitudes y que en el sistema haya %d atendedores.", tamCola, numeroAtendedores);
+		writeLogMessage(quienHabla,buffer);
+		pthread_mutex_unlock(&escribirLog);
 	}else{
 		tamCola = TAMCOLADEFECTO;
 		numeroAtendedores = 3;
+		pthread_mutex_lock(&escribirLog);
+		sprintf(buffer, "Se inicia el programa con los valores por defecto, es decir %d solicitudes en la cola y %d atendedores.", TAMCOLADEFECTO, numeroAtendedores);
+		writeLogMessage(quienHabla,buffer);
+		pthread_mutex_unlock(&escribirLog);
 	}
 
 	if(tamCola<=0){
@@ -201,9 +215,14 @@ int main(int argc, char *argv[]){
 
 	pthread_mutex_lock(&escribirLog);
 	sprintf(buffer, "EMPIEZA");	
-	sprintf(quienHabla,"Sistema"); 
 	writeLogMessage(quienHabla, buffer);
 	pthread_mutex_unlock(&escribirLog);
+
+	printf("***********************\nASIGNACION DINAMICA DE RECURSOS\n***********************\n");
+	printf("Aumento del numero de solicitudes en la cola -> SIGTRAP (5)\n");
+	printf("Aumento del numero de atendedores -> SIGABRT (6)\n");
+
+
 
 	idSolicitud = 1;
 	fin = false;
@@ -307,8 +326,9 @@ void nuevaSolicitud(int sig){
 				(*(cola+siguiente)).tipo = QR;
 				pthread_mutex_unlock(&datosSolicitud);
 				pthread_create(&(*(cola+siguiente)).tid, NULL, accionesSolicitud, &*(cola+siguiente));
-
 			}
+			printf("Soy la solicitud con id %d y mi tid es %d\n", (*(cola+siguiente)).id, pthread_self());
+
 		}
 	}else{
 		pthread_mutex_lock(&escribirLog);
@@ -992,6 +1012,7 @@ void borrarTodo(){
 */
 void aumentarNumAtendedores(int sig){
     int numNuevosAtendedores, numeroAntiguosAtendedores;
+    char quienHabla[10], buffer[100];
 
     pthread_mutex_lock(&comprobarFin);
 
@@ -1030,9 +1051,15 @@ void aumentarNumAtendedores(int sig){
     		nuevoAtendedor(PRO);
     	}
 
+		sprintf(quienHabla, "Sistema");
+		sprintf(buffer, "Se ha cambiado el numero de atendedores de %d a %d a traves del envio de la senial SIGABRT.",numeroAntiguosAtendedores, numeroAtendedores);
+		writeLogMessage(quienHabla,buffer);
+
     	pthread_mutex_unlock(&datosSolicitud);
 	    pthread_mutex_unlock(&actividadSocial);
 	    pthread_mutex_unlock(&escribirLog);
+
+	    printf("salgo de la manejadora de aumentar atendedores\n");
 
 	}
 
@@ -1044,6 +1071,7 @@ void aumentarNumAtendedores(int sig){
 */
 void aumentarNumSolicitudes(int sig){
     int numNuevasSolicitudes, primeraPosicionVacia;
+    char quienHabla[10], buffer[100];
 
     pthread_mutex_lock(&comprobarFin);
 
@@ -1066,11 +1094,15 @@ void aumentarNumSolicitudes(int sig){
 		solicitudesNuevas = (struct solicitud *)calloc((numNuevasSolicitudes)*sizeof(struct solicitud *), numNuevasSolicitudes);
 
 
-		for(int i=0; i<tamCola; i++){	
+		for(int i=0; i<posicionSiguiente(SOLICITUD); i++){	
 			solicitudesNuevas[i] = cola[i];
 		}	
 
+		printf("Copiadas las solicitudes a la nueva cola\n");
+
 		primeraPosicionVacia = posicionSiguiente(SOLICITUD);
+
+		printf("salgo de la llamada posicion siguiente\n");
 
 		if(primeraPosicionVacia == -1){
 			primeraPosicionVacia = tamCola;
@@ -1079,12 +1111,24 @@ void aumentarNumSolicitudes(int sig){
 
 		for(int i=primeraPosicionVacia; i<numNuevasSolicitudes; i++){	//TODO comprobar esto
 			solicitudesNuevas[i].id = -1;
-		}	
+		}
+
+		printf("Inicializados los ids a -1\n");	
 
 		free(cola);
+		printf("Liberada la cola anterior\n");
 		cola = solicitudesNuevas;
+		printf("asignada la nueva cola\n");
 
 		tamCola = numNuevasSolicitudes;
+
+		printf("Asignado nuevo tamanio\n");
+
+		sprintf(quienHabla, "Sistema");
+		sprintf(buffer, "Se ha cambiado el numero de solicitudes a %d a traves del envio de la senial SIGTRAP.", tamCola);
+		writeLogMessage(quienHabla,buffer);
+
+		printf("Escrito el log\n");
 
 	    pthread_mutex_unlock(&datosSolicitud);
 	    pthread_mutex_unlock(&actividadSocial);
@@ -1093,4 +1137,5 @@ void aumentarNumSolicitudes(int sig){
 	}
 
     pthread_mutex_unlock(&comprobarFin);
+    printf("salgo de la manejadora de aumentar solicitudes\n");
 }
